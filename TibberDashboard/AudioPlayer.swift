@@ -29,7 +29,6 @@ class AudioPlayer {
             print("Failed to set audio session: \(error.localizedDescription)")
         }
 
-        // 1005 was warning, 1016 was critical. Swapping them.
         let systemSoundID: SystemSoundID = level == .critical ? 1005 : 1016
         AudioServicesPlaySystemSound(systemSoundID)
     }
