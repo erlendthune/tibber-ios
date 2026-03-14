@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.presentationMode) var presentationMode
     @ObservedObject var store: TibberMonitorStore
-    @Environment(\.dismiss) var dismiss
+    @StateObject private var hueManager = HueManager.shared
     
     @State private var isApiKeyVisible: Bool = false
     @State private var isHomeIdVisible: Bool = false
@@ -104,13 +105,58 @@ struct SettingsView: View {
                     }
                     .foregroundColor(.red)
                 }
-            }
-            .navigationTitle("Dashboard Settings")
+                
+                Section(header: Text("Philips Hue (Optional)"), footer: Text("Connect to your Philips Hue Bridge to flash lights on critical alerts.")) {
+                    HStack {
+                        Text("Bridge IP")
+                        Spacer()
+                        TextField("Not discovered", text: $hueManager.bridgeIP)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numbersAndPunctuation)
+                    }
+                    
+                    HStack {
+                        Text("Username")
+                        Spacer()
+                        Text(hueManager.username.isEmpty ? "Not linked" : "Linked")
+                            .foregroundColor(hueManager.username.isEmpty ? .secondary : .green)
+                    }
+                    
+                    if hueManager.username.isEmpty {
+                        Button(action: {
+                            if hueManager.bridgeIP.isEmpty {
+                                hueManager.discoverBridge()
+                            } else {
+                                // Link must be pressed BEFORE calling linkBridge()
+                                hueManager.linkBridge()
+                            }
+                        }) {
+                            if hueManager.isDiscovering {
+                                Text("Discovering Bridge...")
+                            } else if hueManager.bridgeIP.isEmpty {
+                                Text("Discover Bridge")
+                            } else if hueManager.isLinking {
+                                Text("Press button on Bridge then tap again...")
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text("Link Bridge")
+                            }
+                        }
+                        
+                        if let error = hueManager.discoveryError ?? hueManager.linkError {
+                            Text("Error: \(error)")
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
+                    }
+                }
+            } // Form
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
             }

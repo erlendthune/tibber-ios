@@ -341,6 +341,11 @@ class TibberMonitorStore: ObservableObject {
             wakeScreen()
             AudioPlayer.shared.playAlert(level: alertLevel)
             
+            // Trigger Philips Hue critical alert
+            if alertLevel == .critical {
+                HueManager.shared.triggerCriticalAlert()
+            }
+            
             // Increment breaches (only once per instance, or trust user's logic)
             // Simpler: If it just crossed critical right now, we log a breach
             if averageKW >= criticalThreshold && lastRecordedAverage < criticalThreshold {
