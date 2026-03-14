@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import OSLog
+import AVFoundation
 
 class TibberMonitorStore: ObservableObject {
     @AppStorage("apiKey") var apiKey: String = ""
@@ -17,9 +18,21 @@ class TibberMonitorStore: ObservableObject {
 
     @Published var liveData: LiveMeasurement?
     @Published var isConnected = false
-    @Published var connectionError: String?
+    @Published var connectionError: String? {
+        didSet {
+            if connectionError != nil {
+                AudioPlayer.shared.playAlert(level: .warning)
+            }
+        }
+    }
     @Published var isScreensaverActive = false
-    @Published var isDataStale = false
+    @Published var isDataStale = false {
+        didSet {
+            if isDataStale {
+                AudioPlayer.shared.playAlert(level: .warning)
+            }
+        }
+    }
 
     @Published var availableHomes: [Home] = []
     @Published var isFetchingHomes = false
