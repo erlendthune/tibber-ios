@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../git/erlendthune.com/src"
+		},
+		{
+			"path": "../../../git"
+		}
+	],
+	"settings": {}
+}

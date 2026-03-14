@@ -31,3 +31,25 @@ struct LiveMeasurement: Codable {
 struct SubscriptionPayload: Codable {
     let query: String
 }
+
+struct Home: Codable, Identifiable {
+    let id: String
+    let appNickname: String?
+    let address: Address?
+}
+
+struct Address: Codable {
+    let address1: String?
+}
+
+struct HomesResponse: Codable {
+    let data: HomesData?
+}
+
+struct HomesData: Codable {
+    let viewer: Viewer?
+}
+
+struct Viewer: Codable {
+    let homes: [Home]?
+}
