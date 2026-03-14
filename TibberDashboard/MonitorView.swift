@@ -87,59 +87,34 @@ struct MonitorView: View {
                         ProgressView("Connecting to Tibber...")
                             .onAppear { store.connect() }
                     } else if let data = store.liveData {
-                        // Ring gauge
-                        ZStack {
-                            let averageKW = (data.averagePower ?? 0) / 1000.0
-                            Circle()
-                                .stroke(lineWidth: 25.0)
-                                .opacity(0.2)
-                                .foregroundColor(colorForAverage(averageKW))
-                            
-                            Circle()
-                                .trim(from: 0.0, to: min(CGFloat(averageKW / store.criticalThreshold), 1.0))
-                                .stroke(style: StrokeStyle(lineWidth: 25.0, lineCap: .round, lineJoin: .round))
-                                .foregroundColor(colorForAverage(averageKW))
-                                .rotationEffect(Angle(degrees: 270.0))
-                                .animation(.linear, value: averageKW)
-                            
-                            VStack {
-                                Text(String(format: "%.2f kW", averageKW))
-                                    .font(.system(size: 40, weight: .bold))
-                                    .foregroundColor(colorForAverage(averageKW))
-
-                                Text("Average")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(40)
                         
-                        // Live Stats
-                        HStack {
-                            VStack(alignment: .leading, spacing: 10) {
-                                let livePowerKW = data.power / 1000.0
-                                Text("Live Power: \(String(format: "%.2f kW", livePowerKW))")
-                                    .font(.headline)
-
-                                // Format timestamp for clear reading
-                                Text("Updated: \(formatTimestamp(data.timestamp))")
-                                    .font(.caption)
-                                    .foregroundColor(store.isDataStale ? .red : .secondary)
-                                
-                                if store.isDataStale {
-                                    Text("⚠️ Data is stale. Connection may be dropped.")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .bold()
+                        GeometryReader { geometry in
+                            let isLandscape = geometry.size.width > geometry.size.height
+                            
+                            if isLandscape {
+                                HStack(spacing: 20) {
+                                    // Left Column: Circle
+                                    circleGauge(for: data, averageKW: (data.averagePower ?? 0) / 1000.0)
+                                        .frame(maxWidth: .infinity)
+                                    
+                                    // Right Column: Stats and Log
+                                    statsAndLog(for: data)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .padding(.horizontal)
+                            } else {
+                                VStack(spacing: 30) {
+                                    // Top: Circle
+                                    circleGauge(for: data, averageKW: (data.averagePower ?? 0) / 1000.0)
+                                    
+                                    // Bottom: Stats and Log
+                                    statsAndLog(for: data)
+                                        .padding(.horizontal)
+                                    
+                                    Spacer()
                                 }
                             }
-                            Spacer()
                         }
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
-                        .padding(.horizontal)
-                        
-                        Spacer()
                     }
                 }
                 .navigationTitle("")
@@ -230,11 +205,85 @@ struct MonitorView: View {
         }
     }
     
-    private func formatTimestamp(_ timestampString: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: timestampString) else { return timestampString }
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return formatter.string(from: date)
+    // MARK: - Subviews for Layout adaptive sizing
+    
+    @ViewBuilder
+    private func circleGauge(for data: LiveMeasurement, averageKW: Double) -> some View {
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 25.0)
+                .opacity(0.2)
+                .foregroundColor(colorForAverage(averageKW))
+            
+            Circle()
+                .trim(from: 0.0, to: min(CGFloat(averageKW / store.criticalThreshold), 1.0))
+                .stroke(style: StrokeStyle(lineWidth: 25.0, lineCap: .round, lineJoin: .round))
+                .foregroundColor(colorForAverage(averageKW))
+                .rotationEffect(Angle(degrees: 270.0))
+                .animation(.linear, value: averageKW)
+            
+            VStack {
+                Text(String(format: "%.2f kW", averageKW))
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(colorForAverage(averageKW))
+
+                Text("Average")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(40)
+    }
+    
+    @ViewBuilder
+    private func statsAndLog(for data: LiveMeasurement) -> some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 10) {
+                    let livePowerKW = data.power / 1000.0
+                    Text("Live Power: \(String(format: "%.2f kW", livePowerKW))")
+                        .font(.headline)
+                    
+                    if store.isDataStale {
+                        Text("⚠️ Data is stale. Connection may be dropped.")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .bold()
+                    }
+                }
+                Spacer()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            
+            // Mini Console Log Drawer
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "terminal")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Connection Log")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.bottom, 4)
+                
+                ScrollView {
+                    ScrollViewReader { proxy in
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(store.connectionLogs.indices, id: \.self) { index in
+                                Text(store.connectionLogs[index])
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 120) // Slightly taller to use up space
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+        }
     }
 }
