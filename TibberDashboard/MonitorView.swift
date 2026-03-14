@@ -114,29 +114,55 @@ struct MonitorView: View {
                         }
                         .padding(40)
                         
-                        // Live Stats
-                        HStack {
-                            VStack(alignment: .leading, spacing: 10) {
-                                let livePowerKW = data.power / 1000.0
-                                Text("Live Power: \(String(format: "%.2f kW", livePowerKW))")
-                                    .font(.headline)
-
-                                // Format timestamp for clear reading
-                                Text("Updated: \(formatTimestamp(data.timestamp))")
-                                    .font(.caption)
-                                    .foregroundColor(store.isDataStale ? .red : .secondary)
-                                
-                                if store.isDataStale {
-                                    Text("⚠️ Data is stale. Connection may be dropped.")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .bold()
+                        // Live Stats and Console
+                        VStack(spacing: 16) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    let livePowerKW = data.power / 1000.0
+                                    Text("Live Power: \(String(format: "%.2f kW", livePowerKW))")
+                                        .font(.headline)
+                                    
+                                    if store.isDataStale {
+                                        Text("⚠️ Data is stale. Connection may be dropped.")
+                                            .font(.caption)
+                                            .foregroundColor(.red)
+                                            .bold()
+                                    }
                                 }
+                                Spacer()
                             }
-                            Spacer()
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+                            
+                            // Mini Console Log Drawer
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "terminal")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("Connection Log")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                .padding(.bottom, 4)
+                                
+                                ScrollView {
+                                    ScrollViewReader { proxy in
+                                        LazyVStack(alignment: .leading, spacing: 2) {
+                                            ForEach(store.connectionLogs.indices, id: \.self) { index in
+                                                Text(store.connectionLogs[index])
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(height: 60)
+                            }
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
                         }
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
                         .padding(.horizontal)
                         
                         Spacer()
@@ -228,13 +254,5 @@ struct MonitorView: View {
         } else {
             return .green
         }
-    }
-    
-    private func formatTimestamp(_ timestampString: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: timestampString) else { return timestampString }
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return formatter.string(from: date)
     }
 }
