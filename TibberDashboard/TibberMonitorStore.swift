@@ -40,6 +40,7 @@ class TibberMonitorStore: ObservableObject {
     
     // Console log
     @Published var connectionLogs: [String] = []
+    @Published var dataLogs: [String] = []
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var inactivityTimer: Timer?
@@ -155,7 +156,7 @@ class TibberMonitorStore: ObservableObject {
         webSocketTask?.resume()
         
         DispatchQueue.main.async {
-            self.addLog("Connecting...")
+            self.addConnectionLog("Connecting...")
         }
 
         // Start receiving messages immediately
@@ -184,7 +185,7 @@ class TibberMonitorStore: ObservableObject {
             // self.liveData = nil // Keep old data rather than blanking out the UI totally
             self.isDataStale = false
             UIApplication.shared.isIdleTimerDisabled = false
-            self.addLog("Disconnected")
+            self.addConnectionLog("Disconnected")
         }
     }
     
@@ -246,7 +247,7 @@ class TibberMonitorStore: ObservableObject {
                     self.isConnected = false
                     self.isConnecting = false
                     self.connectionError = "Connection failed: \(error.localizedDescription)"
-                    self.addLog("Error: \(error.localizedDescription)")
+                    self.addConnectionLog("Error: \(error.localizedDescription)")
                     self.triggerReconnect()
                 }
                 
@@ -287,7 +288,7 @@ class TibberMonitorStore: ObservableObject {
                 self.connectionError = nil
                 self.reconnectAttempt = 0 // Reset backoff on success
                 self.isReconnecting = false
-                self.addLog("Connected")
+                self.addConnectionLog("Connected")
             }
             subscribeToLiveMeasurement()
             
@@ -300,7 +301,7 @@ class TibberMonitorStore: ObservableObject {
                         self.isDataStale = false
                         self.evaluateThresholds(measurement: measurement)
                         // Add log silently for incoming data
-                        self.addLog("Data received")
+                        self.addDataLog("Data received: \(Int(measurement.power)) W")
                     }
                 }
             } catch {
@@ -316,6 +317,9 @@ class TibberMonitorStore: ObservableObject {
         case "ping":
             print("Received ping, sending pong")
             self.sendMessage(["type": "pong"])
+            DispatchQueue.main.async {
+                self.addConnectionLog("Keep-alive (ping) received")
+            }
             
         default:
             print("Received unknown message type: \(type)")
@@ -384,7 +388,7 @@ class TibberMonitorStore: ObservableObject {
                 // Timer fired: No activity for 60 seconds
                 DispatchQueue.main.async {
                     self?.isDataStale = true
-                    self?.addLog("Stale connection (60s). Reconnecting...")
+                    self?.addConnectionLog("Stale connection (60s). Reconnecting...")
                     self?.triggerReconnect()
                 }
             }
@@ -397,8 +401,10 @@ class TibberMonitorStore: ObservableObject {
         guard !isReconnecting else { return }
         isReconnecting = true
         
-        // Ensure old socket is dead
+        // Ensure old socket is dead and stale states are reset
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        isConnected = false
+        isConnecting = false
         
         // Exponential backoff: 2^attempt (1s, 2s, 4s, 8s, 16s, 32s, 60s max)
         let maxDelay: TimeInterval = 60.0
@@ -414,7 +420,7 @@ class TibberMonitorStore: ObservableObject {
         print(logMsg)
         
         DispatchQueue.main.async { [weak self] in
-            self?.addLog("Delaying: \(String(format: "%.1f", delay))s")
+            self?.addConnectionLog("Delaying: \(String(format: "%.1f", delay))s")
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -445,16 +451,32 @@ class TibberMonitorStore: ObservableObject {
     
     // MARK: - Logging
     
-    func addLog(_ message: String) {
+    func addConnectionLog(_ message: String, source: String = "TIBBER") {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
         formatter.dateStyle = .none
         let timeString = formatter.string(from: Date())
         
+        let prefix = source.padding(toLength: 6, withPad: " ", startingAt: 0)
+        
         // Add new log at the start and keep last 50 lines to prevent memory bloat
-        connectionLogs.insert("[\(timeString)] \(message)", at: 0)
+        connectionLogs.insert("[\(timeString)] [\(prefix)] \(message)", at: 0)
         if connectionLogs.count > 50 {
             connectionLogs.removeLast()
+        }
+    }
+    
+    func addDataLog(_ message: String, source: String = "TIBBER") {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        let timeString = formatter.string(from: Date())
+        
+        let prefix = source.padding(toLength: 6, withPad: " ", startingAt: 0)
+        
+        dataLogs.insert("[\(timeString)] [\(prefix)] \(message)", at: 0)
+        if dataLogs.count > 50 {
+            dataLogs.removeLast()
         }
     }
 }

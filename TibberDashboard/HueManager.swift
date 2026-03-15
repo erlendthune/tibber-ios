@@ -7,6 +7,7 @@ class HueManager: ObservableObject {
     
     @AppStorage("hueBridgeIP") var bridgeIP: String = ""
     @AppStorage("hueUsername") var username: String = ""
+    @AppStorage("hueEnabled") var isEnabled: Bool = true // Added config flag for flashing lights
     
     @Published var isDiscovering = false
     @Published var discoveryError: String?
@@ -101,7 +102,7 @@ class HueManager: ObservableObject {
     
     // Trigger critical alert (flash lights)
     func triggerCriticalAlert() {
-        guard !bridgeIP.isEmpty, !username.isEmpty else { return }
+        guard isEnabled, !bridgeIP.isEmpty, !username.isEmpty else { return } // Added isEnabled guard
         
         // Group 0 represents all lights
         let urlString = "http://\(bridgeIP)/api/\(username)/groups/0/action"
@@ -114,6 +115,12 @@ class HueManager: ObservableObject {
         let payload: [String: Any] = ["alert": "lselect"]
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload, options: [])
         
-        URLSession.shared.dataTask(with: request).resume()
+        Task {
+            do {
+                _ = try await URLSession.shared.data(for: request)
+            } catch {
+                print("Hue critical alert error: \(error)")
+            }
+        }
     }
 }
