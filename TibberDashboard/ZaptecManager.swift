@@ -6,7 +6,7 @@ import SwiftUI
 struct ZaptecStateResponse: Codable {
     let StateId: Int
     let Timestamp: String
-    let ValueAsString: String
+    let ValueAsString: String?
 }
 
 // Added to decode chargers tied to an installation
@@ -37,9 +37,14 @@ class ZaptecManager: ObservableObject {
     
     @Published var isCharging = false
     @Published var chargePower: Double = 0.0 // in kW
+    @Published var sessionEnergy: Double = 0.0 // in kWh (StateId 553)
+    @Published var voltage: Double = 0.0 // in V (StateId 501)
+    @Published var activeCurrent: Double = 0.0 // in A (StateId 708)
+    @Published var operationModeString: String = "Unknown"
     @Published var lastStateUpdate: Date?
     @Published var activeChargerId: String = "" // Added to keep track of the specific charger for commands
     @Published var allowedChargeCurrent: Double = 16.0 // Added to sync UI with API value
+    @Published var pendingChargeCurrent: Double? // Added to handle local stepper changes before saving
     @Published var lastChargeCurrentUpdate: Date? // Prevent updating more than once every 15 mins
     
     @AppStorage("zaptecMaxConfiguredCurrent") var maxConfiguredCurrent: Double = 13.0 // User configurable maximum
@@ -134,6 +139,7 @@ class ZaptecManager: ObservableObject {
         // Poll every 60 seconds
         updateTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             self?.fetchState()
+            self?.fetchInstallationDetails()
         }
     }
     
@@ -213,11 +219,7 @@ class ZaptecManager: ObservableObject {
         // Usually, to get states, you need the charger ID, so we might need a two-step process:
         // 1. Get chargers for installation
         // 2. Get state for the first charger
-        fetchChargersAndState(token: token)
-    }
-    
-    private func fetchChargersAndState(token: String) {
-        // Obsolete since we explicitly load and pick it in UI now.
+        fetchChargerState(chargerId: activeChargerId, token: token)
     }
     
     // Fallback if needed when you fetch Installation state by UUID directly instead of chargers.
@@ -245,6 +247,10 @@ class ZaptecManager: ObservableObject {
                         // Clamp the read value to the maximum configured current so the Stepper UI doesn't break
                         let clampedValue = min(availableCurrent, self?.maxConfiguredCurrent ?? 32.0)
                         self?.allowedChargeCurrent = clampedValue
+                        // Automatically sync pending current if it hasn't been edited
+                        if self?.pendingChargeCurrent == nil {
+                            self?.pendingChargeCurrent = clampedValue
+                        }
                         self?.monitorStore?.addConnectionLog("Set reading: \(clampedValue)A", source: "ZAPTEC")
                     }
                 }
@@ -261,7 +267,19 @@ class ZaptecManager: ObservableObject {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    self?.monitorStore?.addConnectionLog("State error: \(error.localizedDescription)", source: "ZAPTEC")
+                }
+                return
+            }
             guard let data = data else { return }
+            
+            // Print raw state string directly to console for debugging
+            if let str = String(data: data, encoding: .utf8) {
+                print("Zaptec Raw state: \(str)")
+            }
+            
             do {
                 let states = try JSONDecoder().decode([ZaptecStateResponse].self, from: data)
                 DispatchQueue.main.async {
@@ -269,6 +287,9 @@ class ZaptecManager: ObservableObject {
                     self?.monitorStore?.addDataLog("State update received", source: "ZAPTEC")
                 }
             } catch {
+                if let str = String(data: data, encoding: .utf8) {
+                    print("Raw state: \(str)")
+                }
                 print("Failed to decode Zaptec state: \(error)")
                 DispatchQueue.main.async {
                     self?.monitorStore?.addConnectionLog("State decode error", source: "ZAPTEC")
@@ -281,23 +302,71 @@ class ZaptecManager: ObservableObject {
         self.lastStateUpdate = Date()
         
         for state in states {
-            // StateId 71 = ChargerOperationMode
-            // 1 = Disconnected, 2 = Connected Requesting, 3 = Charging, 5 = Error
-            if state.StateId == 71 {
-                if let mode = Int(state.ValueAsString) {
-                    self.isCharging = (mode == 3)
+            // StateId 710 = ChargerOperationMode
+            // Based on ID 710 mappings: 1=Disconnected, 2=Connected/Waiting, 3=Charging, 5=Finished/Idle
+            if state.StateId == 710 {
+                if let val = state.ValueAsString {
+                    // It can be float like "3.0" or integer like "3" depending on Zaptec backend formatting. Use Double and cast to Int to be safe.
+                    if let valDouble = Double(val) {
+                        let mode = Int(valDouble)
+                        self.isCharging = (mode == 3)
+                        
+                        let modeString: String
+                        switch mode {
+                        case 1: modeString = "Disconnected"
+                        case 2: modeString = "Waiting/Allocating"
+                        case 3: modeString = "Charging"
+                        case 5: modeString = "Finished/Idle"
+                        default: modeString = "Unknown (\(mode))"
+                        }
+                        
+                        DispatchQueue.main.async {
+                            self.operationModeString = modeString
+                            self.monitorStore?.addConnectionLog("Mode: \(modeString)", source: "ZAPTEC")
+                        }
+                    } else {
+                        // Debug if casting completely fails
+                        print("Failed to decode Zaptec mode from string: \(val)")
+                    }
                 }
             }
             
-            // StateId 73 = TotalChargePower (kW)
-            if state.StateId == 73 {
-                if let power = Double(state.ValueAsString) {
-                    self.chargePower = power
+            // StateId 513 = Total Charge Power in Watts (Found in specific setups)
+            if state.StateId == 513 {
+                if let val = state.ValueAsString, let powerWatts = Double(val) {
+                    DispatchQueue.main.async {
+                        // Convert watts to kW
+                        self.chargePower = powerWatts / 1000.0
+                    }
                 }
             }
             
-            // StateId 100 or specific API responses track the current limit
-            // Zaptec documentation shows it can be pulled depending on setup.
+            // StateId 553 = Session Energy in kWh
+            if state.StateId == 553 {
+                if let val = state.ValueAsString, let energy = Double(val) {
+                    DispatchQueue.main.async {
+                        self.sessionEnergy = energy
+                    }
+                }
+            }
+            
+            // StateId 501 = Voltage
+            if state.StateId == 501 {
+                if let val = state.ValueAsString, let vDouble = Double(val) {
+                    DispatchQueue.main.async {
+                        self.voltage = vDouble
+                    }
+                }
+            }
+            
+            // StateId 708 = Active Current
+            if state.StateId == 708 {
+                if let val = state.ValueAsString, let cDouble = Double(val) {
+                    DispatchQueue.main.async {
+                        self.activeCurrent = cDouble
+                    }
+                }
+            }
         }
     }
     
@@ -334,6 +403,8 @@ class ZaptecManager: ObservableObject {
                         if let currentValue = extractedValue {
                             DispatchQueue.main.async {
                                 self?.allowedChargeCurrent = currentValue
+                                // Align pending to reflect actual save state
+                                self?.pendingChargeCurrent = currentValue
                                 self?.monitorStore?.addConnectionLog("Set reading: \(currentValue)A", source: "ZAPTEC")
                             }
                         }
@@ -399,6 +470,8 @@ class ZaptecManager: ObservableObject {
         // Update local UI state immediately to prevent jumping
         DispatchQueue.main.async {
             self.allowedChargeCurrent = Double(clampedAmps)
+            // Align pending to reflect actual save state
+            self.pendingChargeCurrent = Double(clampedAmps)
             self.lastChargeCurrentUpdate = Date()
         }
         

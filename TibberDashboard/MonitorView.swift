@@ -89,6 +89,7 @@ struct MonitorView: View {
     @ObservedObject var store: TibberMonitorStore
     @State private var showingSettings = false
     @State private var showingHelp = false
+    @State private var showingLogs = false
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
@@ -130,7 +131,7 @@ struct MonitorView: View {
                                     // Top: Circle
                                     circleGauge(for: data, averageKW: (data.averagePower ?? 0) / 1000.0)
                                     
-                                    // Bottom: Stats and Log
+                                    // Bottom: Stats
                                     statsAndLog(for: data)
                                         .padding(.horizontal)
                                     
@@ -161,7 +162,31 @@ struct MonitorView: View {
                     }
                     .disabled(store.isScreensaverActive)
 
+                    // Logs button - Left aligned next to Help button
+                    Button(action: {
+                        showingLogs = true
+                    }) {
+                        Image(systemName: "terminal")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                            .padding(.vertical)
+                            .padding(.trailing)
+                    }
+                    .disabled(store.isScreensaverActive)
+
                     Spacer()
+                    
+                    // Screensaver button right aligned before Settings
+                    Button(action: {
+                        store.isScreensaverActive = true
+                    }) {
+                        Image(systemName: "moon.zzz")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                            .padding(.vertical)
+                            .padding(.leading)
+                    }
+                    .disabled(store.isScreensaverActive)
                     
                     // Settings button right aligned
                     Button(action: { 
@@ -183,6 +208,7 @@ struct MonitorView: View {
             if store.isScreensaverActive {
                 Color.black
                     .ignoresSafeArea()
+                    .contentShape(Rectangle()) // Ensure entire black area catches taps
                     .onTapGesture {
                         store.wakeScreen() // dismiss black overlay
                     }
@@ -191,15 +217,6 @@ struct MonitorView: View {
             }
         }
         .statusBarHidden(true) // Hides the top status bar (battery, time, etc.) for a cleaner look
-        .onTapGesture {
-            // Unconditionally toggle screensaver if already active
-            if store.isScreensaverActive {
-                store.wakeScreen()
-            } else {
-                // If not active, turn it on immediately on touch
-                store.isScreensaverActive = true
-            }
-        }
         .sheet(isPresented: $showingSettings) {
             SettingsView(store: store)
                 // Reload on dismiss only if credentials changed
@@ -212,6 +229,9 @@ struct MonitorView: View {
         }
         .sheet(isPresented: $showingHelp) {
             HelpView()
+        }
+        .sheet(isPresented: $showingLogs) {
+            LogsSheetView(store: store)
         }
         .onDisappear {
             store.disconnect()
@@ -306,120 +326,133 @@ struct MonitorView: View {
                                 .foregroundColor(.green)
                                 .bold()
                         } else {
-                            Text("Idle")
+                            Text(localZaptecManager.operationModeString)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
                     
+                    if localZaptecManager.isCharging {
+                        HStack {
+                            Spacer()
+                            Text("\(String(format: "%.1f", localZaptecManager.voltage))V • \(String(format: "%.2f", localZaptecManager.activeCurrent))A • Session: \(String(format: "%.2f", localZaptecManager.sessionEnergy)) kWh")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    } else if localZaptecManager.sessionEnergy > 0 {
+                        // Show session energy when finished or paused
+                         HStack {
+                             Spacer()
+                             Text("Session: \(String(format: "%.2f", localZaptecManager.sessionEnergy)) kWh")
+                                 .font(.caption2)
+                                 .foregroundColor(.secondary)
+                         }
+                    }
+                    
                     Divider()
                     
                     HStack {
-                        // Play/Pause button
-                        Button(action: {
-                            if localZaptecManager.isCharging {
-                                localZaptecManager.pauseCharging()
-                            } else {
-                                localZaptecManager.resumeCharging()
-                            }
-                        }) {
-                            Image(systemName: localZaptecManager.isCharging ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(localZaptecManager.isCharging ? .orange : .green)
-                        }
-                        
-                        Spacer()
-                        
                         // Current adjustment
-                        Text("\(Int(localZaptecManager.allowedChargeCurrent))A")
+                        // Use pending to allow multiple taps without sending a request immediately
+                        let displayCurrent = localZaptecManager.pendingChargeCurrent ?? localZaptecManager.allowedChargeCurrent
+                        
+                        Text("\(Int(displayCurrent))A")
                             .font(.subheadline)
                             .frame(width: 40)
                         
-                        // Local binding to smooth out stepper updates without infinite loops
                         let currentBinding = Binding<Double>(
-                            get: { localZaptecManager.allowedChargeCurrent },
+                            get: { displayCurrent },
                             set: { newValue in
-                                localZaptecManager.updateChargeCurrent(amps: Int(newValue))
+                                localZaptecManager.pendingChargeCurrent = newValue
                             }
                         )
                         
                         Stepper("", value: currentBinding, in: 6...localZaptecManager.maxConfiguredCurrent, step: 1)
                             .labelsHidden()
+                            
+                        // Show save button ONLY if pending value differs from actual allowed and we aren't loading
+                        if let pending = localZaptecManager.pendingChargeCurrent, Int(pending) != Int(localZaptecManager.allowedChargeCurrent) {
+                            Button(action: {
+                                localZaptecManager.updateChargeCurrent(amps: Int(pending))
+                            }) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.leading, 5)
+                            .transition(.opacity)
+                        }
                     }
                 }
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
             }
+        }
+    }
+}
 
-            // Segmented picker for logs
-            Picker("Log Type", selection: Binding(
-                get: { self.selectedLogTab },
-                set: { newValue in self.selectedLogTab = newValue }
-            )) {
-                Text("Connection log").tag(0)
-                Text("Data log").tag(1)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding(.horizontal)
+// MARK: - Logs Sheet View
 
-            if selectedLogTab == 0 {
-                // Connection Log Drawer
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Image(systemName: "terminal")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("Connection Log")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.bottom, 4)
-                    
+struct LogsSheetView: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: TibberMonitorStore
+    @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                Picker("Log Type", selection: Binding(
+                    get: { self.selectedLogTab },
+                    set: { newValue in self.selectedLogTab = newValue }
+                )) {
+                    Text("Connection log").tag(0)
+                    Text("Data log").tag(1)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+
+                if selectedLogTab == 0 {
+                    // Connection Log
                     ScrollView {
                         ScrollViewReader { proxy in
-                            LazyVStack(alignment: .leading, spacing: 2) {
+                            LazyVStack(alignment: .leading, spacing: 4) {
                                 ForEach(store.connectionLogs.indices, id: \.self) { index in
                                     Text(store.connectionLogs[index])
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(.system(size: 12, design: .monospaced))
                                         .foregroundColor(.secondary)
                                 }
                             }
+                            .padding()
                         }
                     }
                     .frame(maxHeight: .infinity)
-                }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
-            } else {
-                // Data Log Drawer
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Image(systemName: "chart.bar.doc.horizontal")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("Data Log")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.bottom, 4)
-                    
+                    .background(Color(.systemGray6))
+                } else {
+                    // Data Log
                     ScrollView {
                         ScrollViewReader { proxy in
-                            LazyVStack(alignment: .leading, spacing: 2) {
+                            LazyVStack(alignment: .leading, spacing: 4) {
                                 ForEach(store.dataLogs.indices, id: \.self) { index in
                                     Text(store.dataLogs[index])
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(.system(size: 12, design: .monospaced))
                                         .foregroundColor(.secondary)
                                 }
                             }
+                            .padding()
                         }
                     }
                     .frame(maxHeight: .infinity)
+                    .background(Color(.systemGray6))
                 }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            }
+            .navigationTitle("Diagnostics Logs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
             }
         }
     }
