@@ -53,6 +53,22 @@ struct HelpView: View {
                             .font(.headline)
                         Text("If your hour average breaches your Warning or Critical thresholds, an alarm sound will play to notify you, even if the screen is black.")
                     }
+                    
+                    Divider()
+                    
+                    Group {
+                        Text("Zaptec Charger Integration")
+                            .font(.headline)
+                        Text("You can control your Zaptec EV charger directly from the dashboard. Go to Settings, enter your Zaptec credentials and Installation ID. From the dashboard, you can monitor charge status, resume/pause charging, and adjust the available current limit. Please note that Zaptec restricts adjusting current limits to a maximum of once every 15 minutes.")
+                    }
+                    
+                    Divider()
+                    
+                    Group {
+                        Text("Philips Hue Lights")
+                            .font(.headline)
+                        Text("You can synchronize your Philips Hue smart lights to visually indicate your power consumption level, including flashing the lights when a critical threshold is breached. To use this, go to Settings, discover your Bridge on your local network, tap the physical button on the bridge, and link it. You can enable or disable light flashing using the toggle in Settings.")
+                    }
                 }
                 .padding()
             }
@@ -75,6 +91,13 @@ struct MonitorView: View {
     @State private var showingHelp = false
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
+    @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
+    
+    // Inject the store reference into the App's Zaptec instance right at load.
+    init(store: TibberMonitorStore) {
+        self.store = store
+        ZaptecManager.shared.monitorStore = store
+    }
     
     var body: some View {
         ZStack {
@@ -192,6 +215,12 @@ struct MonitorView: View {
         }
         .onDisappear {
             store.disconnect()
+            ZaptecManager.shared.stopPolling()
+        }
+        .onAppear {
+            if ZaptecManager.shared.token == nil && !ZaptecManager.shared.username.isEmpty {
+                ZaptecManager.shared.authenticate()
+            }
         }
     }
     
@@ -237,6 +266,9 @@ struct MonitorView: View {
     
     @ViewBuilder
     private func statsAndLog(for data: LiveMeasurement) -> some View {
+        // Since statsAndLog is a view builder outside the main struct body, we must access ZaptecManager via its singleton to fix scope closure constraints
+        let localZaptecManager = ZaptecManager.shared
+        
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 10) {
@@ -256,34 +288,139 @@ struct MonitorView: View {
             .padding()
             .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
             
-            // Mini Console Log Drawer
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Image(systemName: "terminal")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("Connection Log")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
+            // Zaptec Charger Info (Optional)
+            if localZaptecManager.isAuthenticated {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: "bolt.car")
+                            .font(.caption)
+                            .foregroundColor(localZaptecManager.isCharging ? .green : .secondary)
+                        Text("Zaptec Charger")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        
+                        if localZaptecManager.isCharging {
+                            Text("\(String(format: "%.2f", localZaptecManager.chargePower)) kW")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                                .bold()
+                        } else {
+                            Text("Idle")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    HStack {
+                        // Play/Pause button
+                        Button(action: {
+                            if localZaptecManager.isCharging {
+                                localZaptecManager.pauseCharging()
+                            } else {
+                                localZaptecManager.resumeCharging()
+                            }
+                        }) {
+                            Image(systemName: localZaptecManager.isCharging ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(localZaptecManager.isCharging ? .orange : .green)
+                        }
+                        
+                        Spacer()
+                        
+                        // Current adjustment
+                        Text("\(Int(localZaptecManager.allowedChargeCurrent))A")
+                            .font(.subheadline)
+                            .frame(width: 40)
+                        
+                        // Local binding to smooth out stepper updates without infinite loops
+                        let currentBinding = Binding<Double>(
+                            get: { localZaptecManager.allowedChargeCurrent },
+                            set: { newValue in
+                                localZaptecManager.updateChargeCurrent(amps: Int(newValue))
+                            }
+                        )
+                        
+                        Stepper("", value: currentBinding, in: 6...localZaptecManager.maxConfiguredCurrent, step: 1)
+                            .labelsHidden()
+                    }
                 }
-                .padding(.bottom, 4)
-                
-                ScrollView {
-                    ScrollViewReader { proxy in
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(store.connectionLogs.indices, id: \.self) { index in
-                                Text(store.connectionLogs[index])
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            }
+
+            // Segmented picker for logs
+            Picker("Log Type", selection: Binding(
+                get: { self.selectedLogTab },
+                set: { newValue in self.selectedLogTab = newValue }
+            )) {
+                Text("Connection log").tag(0)
+                Text("Data log").tag(1)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding(.horizontal)
+
+            if selectedLogTab == 0 {
+                // Connection Log Drawer
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "terminal")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Connection Log")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.bottom, 4)
+                    
+                    ScrollView {
+                        ScrollViewReader { proxy in
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                ForEach(store.connectionLogs.indices, id: \.self) { index in
+                                    Text(store.connectionLogs[index])
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     }
+                    .frame(maxHeight: .infinity)
                 }
-                .frame(maxHeight: 120) // Slightly taller to use up space
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            } else {
+                // Data Log Drawer
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "chart.bar.doc.horizontal")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Data Log")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.bottom, 4)
+                    
+                    ScrollView {
+                        ScrollViewReader { proxy in
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                ForEach(store.dataLogs.indices, id: \.self) { index in
+                                    Text(store.dataLogs[index])
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
             }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
         }
     }
 }
