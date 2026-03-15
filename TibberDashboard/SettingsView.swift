@@ -4,9 +4,11 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var store: TibberMonitorStore
     @StateObject private var hueManager = HueManager.shared
+    @StateObject private var zaptecManager = ZaptecManager.shared
     
     @State private var isApiKeyVisible: Bool = false
     @State private var isHomeIdVisible: Bool = false
+    @State private var isZaptecPasswordVisible: Bool = false
     
     var body: some View {
         NavigationView {
@@ -106,7 +108,102 @@ struct SettingsView: View {
                     .foregroundColor(.red)
                 }
                 
+                Section(header: Text("Zaptec Charger (Optional)"), footer: Text("Provide credentials to display basic charger state on the dashboard.")) {
+                    TextField("Email", text: $zaptecManager.username)
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
+                        .disableAutocorrection(true)
+                    
+                    HStack {
+                        if isZaptecPasswordVisible {
+                            TextField("Password", text: $zaptecManager.password)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("Password", text: $zaptecManager.password)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        Button(action: {
+                            isZaptecPasswordVisible.toggle()
+                        }) {
+                            Image(systemName: isZaptecPasswordVisible ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    HStack {
+                        Text("Installation ID")
+                            .frame(width: 120, alignment: .leading)
+                        TextField("Guid format", text: $zaptecManager.installationId)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    
+                    HStack {
+                        Text("Max Current (A)")
+                            .frame(width: 120, alignment: .leading)
+                        Stepper("\(Int(zaptecManager.maxConfiguredCurrent)) A", value: $zaptecManager.maxConfiguredCurrent, in: 6...32, step: 1)
+                    }
+                    
+                    Button(action: {
+                        zaptecManager.authenticate()
+                    }) {
+                        HStack {
+                            Text(zaptecManager.isAuthenticated ? "Re-authenticate" : "Authenticate")
+                            Spacer()
+                            if zaptecManager.isAuthenticated {
+                                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                            }
+                        }
+                    }
+                    
+                    if let error = zaptecManager.authError {
+                        VStack(alignment: .leading) {
+                            Text("Setup Error:")
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .bold()
+                            Text(error)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    
+                    if zaptecManager.isAuthenticated && !zaptecManager.installationId.isEmpty {
+                        Button(action: {
+                            zaptecManager.fetchChargers()
+                            zaptecManager.fetchInstallationDetails() // Add diagnostic network call
+                        }) {
+                            HStack {
+                                Text("Fetch Chargers from Installation")
+                                if zaptecManager.isFetchingChargers {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        
+                        if let error = zaptecManager.fetchChargersError {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
+                        
+                        if !zaptecManager.availableChargers.isEmpty {
+                            Picker("Select Charger", selection: $zaptecManager.activeChargerId) {
+                                ForEach(zaptecManager.availableChargers) { charger in
+                                    let displayName = charger.Name ?? charger.DeviceId ?? charger.Id
+                                    Text(displayName).tag(charger.Id)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section(header: Text("Philips Hue (Optional)"), footer: Text("Connect to your Philips Hue Bridge to flash lights on critical alerts.")) {
+                    Toggle("Enable Light Flashing", isOn: $hueManager.isEnabled)
+                    
                     HStack {
                         Text("Bridge IP")
                         Spacer()
