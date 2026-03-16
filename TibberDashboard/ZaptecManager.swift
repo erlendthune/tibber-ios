@@ -293,6 +293,8 @@ class ZaptecManager: ObservableObject {
                 print("Failed to decode Zaptec state: \(error)")
                 DispatchQueue.main.async {
                     self?.monitorStore?.addConnectionLog("State decode error", source: "ZAPTEC")
+                    // Log the decoding error description for easier debugging without Xcode
+                    self?.monitorStore?.addConnectionLog("Error: \(error.localizedDescription)", source: "ZAPTEC")
                 }
             }
         }.resume()
