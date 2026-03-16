@@ -18,13 +18,7 @@ class TibberMonitorStore: ObservableObject {
 
     @Published var liveData: LiveMeasurement?
     @Published var isConnected = false
-    @Published var connectionError: String? {
-        didSet {
-            if connectionError != nil {
-                AudioPlayer.shared.playAlert(level: .warning)
-            }
-        }
-    }
+    @Published var connectionError: String?
     @Published var isScreensaverActive = false
     @Published var isDataStale = false {
         didSet {
@@ -45,6 +39,7 @@ class TibberMonitorStore: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     private var inactivityTimer: Timer?
     private var staleDataTimer: Timer?
+    private var pingTimer: Timer?
     private let logger = Logger(subsystem: "com.erlendthune.tibber", category: "MonitorStore")
     
     // We keep track of the latest recorded average to trigger resets if it clears
@@ -180,6 +175,7 @@ class TibberMonitorStore: ObservableObject {
         isReconnecting = false
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         staleDataTimer?.invalidate()
+        pingTimer?.invalidate()
         DispatchQueue.main.async {
             self.isConnected = false
             // self.liveData = nil // Keep old data rather than blanking out the UI totally
@@ -289,6 +285,7 @@ class TibberMonitorStore: ObservableObject {
                 self.reconnectAttempt = 0 // Reset backoff on success
                 self.isReconnecting = false
                 self.addConnectionLog("Connected")
+                self.startPingTimer()
             }
             subscribeToLiveMeasurement()
             
@@ -321,8 +318,18 @@ class TibberMonitorStore: ObservableObject {
                 self.addConnectionLog("Keep-alive (ping) received")
             }
             
+        case "ka":
+            print("Received keep-alive (ka)")
+            DispatchQueue.main.async {
+                self.addConnectionLog("Keep-alive (ka) received")
+            }
+            
         default:
             print("Received unknown message type: \(type)")
+            DispatchQueue.main.async {
+                // Log unknown message types so they can be seen in the UI's connection log
+                self.addConnectionLog("Unknown msg type: \(type)")
+            }
             break
         }
     }
@@ -370,6 +377,17 @@ class TibberMonitorStore: ObservableObject {
         if currentMonth != lastBreachMonth {
             breachCount = 0
             lastBreachMonth = currentMonth
+        }
+    }
+
+    private func startPingTimer() {
+        DispatchQueue.main.async { [weak self] in
+            self?.pingTimer?.invalidate()
+            // Send a ping every 30 seconds to keep NAT/firewalls open
+            self?.pingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+                // Using graphql-ws standard ping
+                self?.sendMessage(["type": "ping"])
+            }
         }
     }
 
