@@ -79,12 +79,8 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Tariff / Thresholds")) {
-                    Stepper(value: $store.warningThreshold, in: 0.5...20.0, step: 0.5) {
-                        Text("Warning Limit: \(store.warningThreshold, specifier: "%.1f")")
-                    }
-                    
                     Stepper(value: $store.criticalThreshold, in: 1.0...25.0, step: 0.5) {
-                        Text("Critical Limit: \(store.criticalThreshold, specifier: "%.1f")")
+                        Text("Critical Limit: \(store.criticalThreshold, specifier: "%.1f") kWh")
                     }
                 }
 
@@ -106,6 +102,39 @@ struct SettingsView: View {
                         store.breachCount = 0
                     }
                     .foregroundColor(.red)
+                }
+                
+                Section(header: Text("Garage Camera (Optional)"), footer: Text("Provide RTSP URL and credentials to take a snapshot every 5 minutes.")) {
+                    @AppStorage("cameraUrl") var cameraUrl: String = ""
+                    @AppStorage("cameraUsername") var cameraUsername: String = ""
+                    @AppStorage("cameraPassword") var cameraPassword: String = ""
+                    @State var isCameraPasswordVisible: Bool = false
+                    
+                    TextField("RTSP URL (rtsp://ip:port/stream)", text: $cameraUrl)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                    
+                    TextField("Username", text: $cameraUsername)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                    
+                    HStack {
+                        if isCameraPasswordVisible {
+                            TextField("Password", text: $cameraPassword)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("Password", text: $cameraPassword)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        Button(action: {
+                            isCameraPasswordVisible.toggle()
+                        }) {
+                            Image(systemName: isCameraPasswordVisible ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
                 Section(header: Text("Zaptec Charger (Optional)"), footer: Text("Provide credentials to display basic charger state on the dashboard.")) {

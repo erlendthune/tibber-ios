@@ -26,6 +26,30 @@ struct LiveMeasurement: Codable {
     let voltagePhase1: Double?
     let currentL1: Double?
     let powerFactor: Double?
+    
+    func wattsToWarning(threshold: Double) -> Double {
+        let currentMinute = Calendar.current.component(.minute, from: Date())
+        let minutesRemaining = 60.0 - Double(currentMinute)
+        
+        if minutesRemaining < 1 { return 50000.0 }
+        
+        let accumulatedKWh = accumulatedConsumptionLastHour ?? 0.0
+        let watts = ((threshold - accumulatedKWh) * 60.0 * 1000.0) / minutesRemaining
+        
+        return max(0, watts)
+    }
+    
+    func wattsToCritical(threshold: Double) -> Double {
+        let currentMinute = Calendar.current.component(.minute, from: Date())
+        let minutesRemaining = 60.0 - Double(currentMinute)
+        
+        if minutesRemaining < 1 { return 50000.0 }
+        
+        let accumulatedKWh = accumulatedConsumptionLastHour ?? 0.0
+        let watts = ((threshold - accumulatedKWh) * 60.0 * 1000.0) / minutesRemaining
+        
+        return max(0, watts)
+    }
 }
 
 struct SubscriptionPayload: Codable {

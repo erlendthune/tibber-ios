@@ -8,7 +8,6 @@ class TibberMonitorStore: ObservableObject {
     @AppStorage("apiKey") var apiKey: String = ""
     @AppStorage("homeId") var homeId: String = ""
     
-    @AppStorage("warningThreshold") var warningThreshold: Double = 4.0 // kWh or kW target
     @AppStorage("criticalThreshold") var criticalThreshold: Double = 5.0 // kWh or kW target
     
     @AppStorage("breachCount") var breachCount: Int = 0
@@ -298,7 +297,8 @@ class TibberMonitorStore: ObservableObject {
                         self.isDataStale = false
                         self.evaluateThresholds(measurement: measurement)
                         // Add log silently for incoming data
-                        self.addDataLog("Data received: \(Int(measurement.power)) W")
+                        let consumption = String(format: "%.3f", measurement.accumulatedConsumptionLastHour ?? 0.0)
+                        self.addDataLog("Hour use: \(consumption) kWh")
                     }
                 }
             } catch {
@@ -324,6 +324,12 @@ class TibberMonitorStore: ObservableObject {
                 self.addConnectionLog("Keep-alive (ka) received")
             }
             
+        case "pong":
+            print("Received pong")
+            DispatchQueue.main.async {
+                self.addConnectionLog("Keep-alive (pong) received")
+            }
+            
         default:
             print("Received unknown message type: \(type)")
             DispatchQueue.main.async {
@@ -335,16 +341,24 @@ class TibberMonitorStore: ObservableObject {
     }
     
     private func evaluateThresholds(measurement: LiveMeasurement) {
-        // The user mentioned to "trust the average received in graphql"
-        // The average power from the API is in W, so we convert it to kW for comparison
-        let averageKW = (measurement.averagePower ?? 0.0) / 1000.0
+        let currentMinute = Calendar.current.component(.minute, from: Date())
+        
+        // Grace period for the first 2 minutes of the hour to avoid false alerts from previous boundary data
+        if currentMinute < 2 {
+            return
+        }
+        
+        let accumulatedKWh = measurement.accumulatedConsumptionLastHour ?? 0.0
+        let currentPowerKW = measurement.power / 1000.0
+        let minutesRemaining = 60.0 - Double(currentMinute)
+        
+        // Projected kWh = [Accumulated kWh so far this hour] + ([Current Power in kW]) * ([Minutes remaining] / 60)
+        let projectedKWh = accumulatedKWh + (currentPowerKW * (minutesRemaining / 60.0))
         
         var alertLevel: AudioPlayer.AlertLevel = .none
         
-        if averageKW >= criticalThreshold {
+        if projectedKWh >= criticalThreshold {
             alertLevel = .critical
-        } else if averageKW >= warningThreshold {
-            alertLevel = .warning
         }
         
         if alertLevel != .none {
@@ -357,14 +371,13 @@ class TibberMonitorStore: ObservableObject {
                 HueManager.shared.triggerCriticalAlert()
             }
             
-            // Increment breaches (only once per instance, or trust user's logic)
-            // Simpler: If it just crossed critical right now, we log a breach
-            if averageKW >= criticalThreshold && lastRecordedAverage < criticalThreshold {
+            // Increment breaches based on actual accumulated (not projected) vs critical
+            if accumulatedKWh >= criticalThreshold && lastRecordedAverage < criticalThreshold {
                 incrementBreach()
             }
         }
         
-        lastRecordedAverage = averageKW
+        lastRecordedAverage = accumulatedKWh
     }
     
     private func incrementBreach() {
