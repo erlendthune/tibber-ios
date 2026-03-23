@@ -23,19 +23,16 @@ struct HelpView: View {
                     Group {
                         Text("Power Ring & Metrics")
                             .font(.headline)
-                        Text("The main circle represents your average power usage for the current hour compared to your configured Critical limit. The ring fills up and changes color based on your setup:")
+                        Text("The main circle displays your energy consumption for the current hour. The ring fills up and changes color based on your configured Critical limit:")
                         HStack {
                             Circle().fill(Color.green).frame(width: 15, height: 15)
-                            Text("Normal")
-                        }
-                        HStack {
-                            Circle().fill(Color.orange).frame(width: 15, height: 15)
-                            Text("Warning (Nearing limit)")
+                            Text("Normal (Below limit)")
                         }
                         HStack {
                             Circle().fill(Color.red).frame(width: 15, height: 15)
-                            Text("Critical (Threshold breached)")
+                            Text("Critical (At or above limit)")
                         }
+                        Text("Inside the ring you'll see: accumulated kWh consumed, time remaining in the hour, live power draw, remaining headroom before reaching your limit, and your configured limit.")
                     }
                     
                     Divider()
@@ -51,7 +48,7 @@ struct HelpView: View {
                     Group {
                         Text("Audio Alarms")
                             .font(.headline)
-                        Text("If your hour average breaches your Warning or Critical thresholds, an alarm sound will play to notify you, even if the screen is black.")
+                        Text("If your hour average breaches your Critical threshold, an alarm sound will play to notify you, even if the screen is black.")
                     }
                     
                     Divider()
@@ -104,11 +101,13 @@ struct MonitorView: View {
         ZStack {
             // Main Dashboard
             NavigationView {
-                VStack(spacing: 30) {
+                VStack(spacing: 0) {
                     if let error = store.connectionError {
                         Text(error).foregroundColor(.red)
+                            .padding()
                     } else if !store.isConnected {
                         ProgressView("Connecting to Tibber...")
+                            .padding()
                             .onAppear { store.connect() }
                     } else if let data = store.liveData {
                         
@@ -126,6 +125,7 @@ struct MonitorView: View {
                                         .frame(maxWidth: .infinity)
                                 }
                                 .padding(.horizontal)
+                                .padding(.top, 20)
                             } else {
                                 VStack(spacing: 30) {
                                     // Top: Circle
@@ -137,6 +137,7 @@ struct MonitorView: View {
                                     
                                     Spacer()
                                 }
+                                .padding(.top, 20)
                             }
                         }
                     }
@@ -247,8 +248,6 @@ struct MonitorView: View {
     private func colorForAverage(_ average: Double) -> Color {
         if average >= store.criticalThreshold {
             return .red
-        } else if average >= store.warningThreshold {
-            return .orange
         } else {
             return .green
         }
@@ -258,30 +257,63 @@ struct MonitorView: View {
     
     @ViewBuilder
     private func circleGauge(for data: LiveMeasurement, averageKW: Double) -> some View {
+        let metricValue = data.accumulatedConsumptionLastHour ?? 0.0
         ZStack {
             Circle()
                 .stroke(lineWidth: 25.0)
                 .opacity(0.2)
-                .foregroundColor(colorForAverage(averageKW))
+                .foregroundColor(colorForAverage(metricValue))
             
             Circle()
-                .trim(from: 0.0, to: min(CGFloat(averageKW / store.criticalThreshold), 1.0))
+                .trim(from: 0.0, to: min(CGFloat(metricValue / store.criticalThreshold), 1.0))
                 .stroke(style: StrokeStyle(lineWidth: 25.0, lineCap: .round, lineJoin: .round))
-                .foregroundColor(colorForAverage(averageKW))
+                .foregroundColor(colorForAverage(metricValue))
                 .rotationEffect(Angle(degrees: 270.0))
-                .animation(.linear, value: averageKW)
-            
-            VStack {
-                Text(String(format: "%.2f kW", averageKW))
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(colorForAverage(averageKW))
+                .animation(.linear, value: metricValue)
+             VStack(spacing: 4) {
+                let accumulatedKWh = data.accumulatedConsumptionLastHour ?? 0.0
+                Text(String(format: "%.2f kWh", accumulatedKWh))
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(colorForAverage(accumulatedKWh))
+                    .minimumScaleFactor(0.3)
+                    .lineLimit(1)
 
-                Text("Average")
+                let minutesRemaining = max(0, 60 - Calendar.current.component(.minute, from: Date()))
+                Text("\(minutesRemaining) min left")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                Divider()
+                    .frame(width: 80)
+                    .padding(.vertical, 2)
+
+                let livePowerKW = data.power / 1000.0
+                Text("Live: \(String(format: "%.2f kW", livePowerKW))")
+                    .font(.caption)
+                    .foregroundColor(.primary)
+
+                // Calculate remaining headroom: how many kW can we still use
+                let remainingKWh = max(0, store.criticalThreshold - accumulatedKWh)
+                let minutesRemainingDouble = Double(minutesRemaining) / 60.0
+                let maxAverageKW = minutesRemainingDouble > 0 ? remainingKWh / minutesRemainingDouble : 0
+                let headroomKW = max(0, maxAverageKW - livePowerKW)
+                
+                Text("Headroom: \(String(format: "%.2f kW", headroomKW))")
+                    .font(.caption)
+                    .foregroundColor(headroomKW > 0 ? .green : .red)
+                
+                Divider()
+                    .frame(width: 80)
+                    .padding(.vertical, 2)
+                
+                Text("Limit: \(String(format: "%.1f kWh", store.criticalThreshold))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 50)
         }
-        .padding(40)
+        .padding(20)
     }
     
     @ViewBuilder
@@ -290,23 +322,7 @@ struct MonitorView: View {
         let localZaptecManager = ZaptecManager.shared
         
         VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 10) {
-                    let livePowerKW = data.power / 1000.0
-                    Text("Live Power: \(String(format: "%.2f kW", livePowerKW))")
-                        .font(.headline)
-                    
-                    if store.isDataStale {
-                        Text("⚠️ Data is stale. Connection may be dropped.")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .bold()
-                    }
-                }
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            // ...existing code...
             
             // Zaptec Charger Info (Optional)
             if localZaptecManager.isAuthenticated {
