@@ -87,9 +87,15 @@ struct MonitorView: View {
     @State private var showingSettings = false
     @State private var showingHelp = false
     @State private var showingLogs = false
+    @State private var showingCamera = false
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
+    
+    // Camera settings from AppStorage
+    @AppStorage("cameraUrl") private var cameraUrl: String = ""
+    @AppStorage("cameraUsername") private var cameraUsername: String = ""
+    @AppStorage("cameraPassword") private var cameraPassword: String = ""
     
     // Inject the store reference into the App's Zaptec instance right at load.
     init(store: TibberMonitorStore) {
@@ -174,6 +180,20 @@ struct MonitorView: View {
                             .padding(.trailing)
                     }
                     .disabled(store.isScreensaverActive)
+                    
+                    // Camera button - Left aligned next to Logs button
+                    if !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
+                        Button(action: {
+                            showingCamera = true
+                        }) {
+                            Image(systemName: "video.circle")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .padding(.vertical)
+                                .padding(.horizontal, 8)
+                        }
+                        .disabled(store.isScreensaverActive)
+                    }
 
                     Spacer()
                     
@@ -233,6 +253,9 @@ struct MonitorView: View {
         }
         .sheet(isPresented: $showingLogs) {
             LogsSheetView(store: store)
+        }
+        .sheet(isPresented: $showingCamera) {
+            CameraViewSheet(cameraUrl: cameraUrl, cameraUsername: cameraUsername, cameraPassword: cameraPassword)
         }
         .onDisappear {
             store.disconnect()
@@ -471,5 +494,77 @@ struct LogsSheetView: View {
                 }
             }
         }
+    }
+}
+
+struct CameraViewSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let cameraUrl: String
+    let cameraUsername: String
+    let cameraPassword: String
+    @State private var statusMessage: String? = "Connecting..."
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                // Construct the RTSP URL with credentials in format: rtsp://username:password@IP:554/stream1
+                let rtspUrl = constructRtspUrl()
+
+                if rtspUrl.isEmpty {
+                    Text("Camera URL not configured")
+                        .foregroundColor(.red)
+                        .padding()
+                } else {
+                    CameraView(url: rtspUrl, statusMessage: $statusMessage)
+
+                    // Status / error overlay
+                    if let message = statusMessage {
+                        VStack {
+                            Spacer()
+                            Text(message)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule().fill(message.lowercased().contains("error") ? Color.red.opacity(0.85) : Color.black.opacity(0.6))
+                                )
+                                .padding(.bottom, 20)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Camera")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func constructRtspUrl() -> String {
+        guard !cameraUrl.isEmpty, !cameraUsername.isEmpty, !cameraPassword.isEmpty else {
+            return ""
+        }
+        
+        // Remove any existing scheme or credentials from cameraUrl
+        var urlPart = cameraUrl
+        if let rangeOfScheme = urlPart.range(of: "rtsp://") {
+            urlPart.removeSubrange(urlPart.startIndex..<rangeOfScheme.upperBound)
+        }
+        // Remove existing credentials if present (username:password@)
+        if let atIndex = urlPart.firstIndex(of: "@") {
+            urlPart.removeSubrange(urlPart.startIndex...atIndex)
+        }
+        
+        // Construct final URL: rtsp://username:password@IP:554/stream1
+        let rtspUrl = "rtsp://\(cameraUsername):\(cameraPassword)@\(urlPart)"
+        return rtspUrl
     }
 }

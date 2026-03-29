@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		297D92559CF7EE5CA1AB295D /* Pods_TibberDashboard_TibberDashboardUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4600157677ACF44FFDD4FBB7 /* Pods_TibberDashboard_TibberDashboardUITests.framework */; };
+		637116366997C8023CFCAAE5 /* Pods_TibberDashboard.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51E4434AE1EC45B4E6F8717 /* Pods_TibberDashboard.framework */; };
+		BCF12F6D8FD45EEED41B296E /* Pods_TibberDashboardTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB7A341050A45FBCEE4043B5 /* Pods_TibberDashboardTests.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		871DC69F2F63454D00CF7145 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,14 +30,54 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		03F2F10E0A70BA850A626BE5 /* Pods-TibberDashboardTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboardTests.debug.xcconfig"; path = "Target Support Files/Pods-TibberDashboardTests/Pods-TibberDashboardTests.debug.xcconfig"; sourceTree = "<group>"; };
+		3A6E82A0F4B16066FBB0D0FD /* Pods-TibberDashboardTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboardTests.release.xcconfig"; path = "Target Support Files/Pods-TibberDashboardTests/Pods-TibberDashboardTests.release.xcconfig"; sourceTree = "<group>"; };
+		4600157677ACF44FFDD4FBB7 /* Pods_TibberDashboard_TibberDashboardUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TibberDashboard_TibberDashboardUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D7774EA6B1BC97E9FAC8109 /* Pods-TibberDashboard.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboard.release.xcconfig"; path = "Target Support Files/Pods-TibberDashboard/Pods-TibberDashboard.release.xcconfig"; sourceTree = "<group>"; };
+		866B13810762D4645C0EF495 /* Pods-TibberDashboard-TibberDashboardUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboard-TibberDashboardUITests.release.xcconfig"; path = "Target Support Files/Pods-TibberDashboard-TibberDashboardUITests/Pods-TibberDashboard-TibberDashboardUITests.release.xcconfig"; sourceTree = "<group>"; };
 		871DC6912F63454A00CF7145 /* TibberDashboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TibberDashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		871DC69E2F63454D00CF7145 /* TibberDashboardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TibberDashboardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		871DC6A82F63454D00CF7145 /* TibberDashboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TibberDashboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		87D7516D2F7311D9006EBAFB /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		87D7516F2F7311E2006EBAFB /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		87D751712F7311EC006EBAFB /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
+		87D751732F7311F5006EBAFB /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		87D751752F7311FD006EBAFB /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		87D751772F731208006EBAFB /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
+		87D751792F731211006EBAFB /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
+		87D7517B2F731219006EBAFB /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
+		87D7517D2F731229006EBAFB /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		87D7517F2F731231006EBAFB /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		87D751812F73123C006EBAFB /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		87D751832F731243006EBAFB /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
+		87D751852F73124C006EBAFB /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		87D751872F73126C006EBAFB /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
+		87D751892F73128B006EBAFB /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
+		87D7518B2F731296006EBAFB /* libiconv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libiconv.tbd; path = usr/lib/libiconv.tbd; sourceTree = SDKROOT; };
+		87D7518D2F7312AA006EBAFB /* libxml2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libxml2.tbd; path = usr/lib/libxml2.tbd; sourceTree = SDKROOT; };
+		87D7518F2F7312B4006EBAFB /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
+		B51E4434AE1EC45B4E6F8717 /* Pods_TibberDashboard.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TibberDashboard.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D56A02828645FE62E026206B /* Pods-TibberDashboard-TibberDashboardUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboard-TibberDashboardUITests.debug.xcconfig"; path = "Target Support Files/Pods-TibberDashboard-TibberDashboardUITests/Pods-TibberDashboard-TibberDashboardUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		F5289D32C5C72B28F8C055C5 /* Pods-TibberDashboard.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TibberDashboard.debug.xcconfig"; path = "Target Support Files/Pods-TibberDashboard/Pods-TibberDashboard.debug.xcconfig"; sourceTree = "<group>"; };
+		FB7A341050A45FBCEE4043B5 /* Pods_TibberDashboardTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TibberDashboardTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3AD949F28A33423999F29DE9 /* Exceptions for "TibberDashboard" folder in "TibberDashboard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 871DC6902F63454A00CF7145 /* TibberDashboard */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		871DC6932F63454A00CF7145 /* TibberDashboard */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3AD949F28A33423999F29DE9 /* Exceptions for "TibberDashboard" folder in "TibberDashboard" target */,
+			);
 			path = TibberDashboard;
 			sourceTree = "<group>";
 		};
@@ -52,6 +98,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				637116366997C8023CFCAAE5 /* Pods_TibberDashboard.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +106,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BCF12F6D8FD45EEED41B296E /* Pods_TibberDashboardTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,12 +114,26 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				297D92559CF7EE5CA1AB295D /* Pods_TibberDashboard_TibberDashboardUITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		643B7EF4EA3D11BD65328E72 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				F5289D32C5C72B28F8C055C5 /* Pods-TibberDashboard.debug.xcconfig */,
+				4D7774EA6B1BC97E9FAC8109 /* Pods-TibberDashboard.release.xcconfig */,
+				D56A02828645FE62E026206B /* Pods-TibberDashboard-TibberDashboardUITests.debug.xcconfig */,
+				866B13810762D4645C0EF495 /* Pods-TibberDashboard-TibberDashboardUITests.release.xcconfig */,
+				03F2F10E0A70BA850A626BE5 /* Pods-TibberDashboardTests.debug.xcconfig */,
+				3A6E82A0F4B16066FBB0D0FD /* Pods-TibberDashboardTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		871DC6882F63454A00CF7145 = {
 			isa = PBXGroup;
 			children = (
@@ -80,6 +142,7 @@
 				871DC6AB2F63454D00CF7145 /* TibberDashboardUITests */,
 				877C42552F68B56D006C9FFB /* Frameworks */,
 				871DC6922F63454A00CF7145 /* Products */,
+				643B7EF4EA3D11BD65328E72 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -96,6 +159,27 @@
 		877C42552F68B56D006C9FFB /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				87D7518F2F7312B4006EBAFB /* OpenGLES.framework */,
+				87D7518D2F7312AA006EBAFB /* libxml2.tbd */,
+				87D7518B2F731296006EBAFB /* libiconv.tbd */,
+				87D751892F73128B006EBAFB /* libc++.tbd */,
+				87D751872F73126C006EBAFB /* libbz2.tbd */,
+				87D751852F73124C006EBAFB /* UIKit.framework */,
+				87D751832F731243006EBAFB /* VideoToolbox.framework */,
+				87D751812F73123C006EBAFB /* Security.framework */,
+				87D7517F2F731231006EBAFB /* QuartzCore.framework */,
+				87D7517D2F731229006EBAFB /* Foundation.framework */,
+				87D7517B2F731219006EBAFB /* CoreVideo.framework */,
+				87D751792F731211006EBAFB /* CoreText.framework */,
+				87D751772F731208006EBAFB /* CoreMedia.framework */,
+				87D751752F7311FD006EBAFB /* CoreGraphics.framework */,
+				87D751732F7311F5006EBAFB /* CoreFoundation.framework */,
+				87D751712F7311EC006EBAFB /* CFNetwork.framework */,
+				87D7516F2F7311E2006EBAFB /* AVFoundation.framework */,
+				87D7516D2F7311D9006EBAFB /* AudioToolbox.framework */,
+				B51E4434AE1EC45B4E6F8717 /* Pods_TibberDashboard.framework */,
+				4600157677ACF44FFDD4FBB7 /* Pods_TibberDashboard_TibberDashboardUITests.framework */,
+				FB7A341050A45FBCEE4043B5 /* Pods_TibberDashboardTests.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -107,9 +191,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 871DC6B22F63454D00CF7145 /* Build configuration list for PBXNativeTarget "TibberDashboard" */;
 			buildPhases = (
+				25E1B0DD7245BDAEBD329C95 /* [CP] Check Pods Manifest.lock */,
 				871DC68D2F63454A00CF7145 /* Sources */,
 				871DC68E2F63454A00CF7145 /* Frameworks */,
 				871DC68F2F63454A00CF7145 /* Resources */,
+				48F1B2459F886E17627A2D6F /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -119,8 +205,6 @@
 				871DC6932F63454A00CF7145 /* TibberDashboard */,
 			);
 			name = TibberDashboard;
-			packageProductDependencies = (
-			);
 			productName = TibberDashboard;
 			productReference = 871DC6912F63454A00CF7145 /* TibberDashboard.app */;
 			productType = "com.apple.product-type.application";
@@ -129,6 +213,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 871DC6B52F63454D00CF7145 /* Build configuration list for PBXNativeTarget "TibberDashboardTests" */;
 			buildPhases = (
+				309B97F0941DDEE6D320AFA9 /* [CP] Check Pods Manifest.lock */,
 				871DC69A2F63454D00CF7145 /* Sources */,
 				871DC69B2F63454D00CF7145 /* Frameworks */,
 				871DC69C2F63454D00CF7145 /* Resources */,
@@ -142,8 +227,6 @@
 				871DC6A12F63454D00CF7145 /* TibberDashboardTests */,
 			);
 			name = TibberDashboardTests;
-			packageProductDependencies = (
-			);
 			productName = TibberDashboardTests;
 			productReference = 871DC69E2F63454D00CF7145 /* TibberDashboardTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -152,9 +235,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 871DC6B82F63454D00CF7145 /* Build configuration list for PBXNativeTarget "TibberDashboardUITests" */;
 			buildPhases = (
+				552383371D94BBD89AB6EE0F /* [CP] Check Pods Manifest.lock */,
 				871DC6A42F63454D00CF7145 /* Sources */,
 				871DC6A52F63454D00CF7145 /* Frameworks */,
 				871DC6A62F63454D00CF7145 /* Resources */,
+				DB304A98F6D3BB4D9D330B42 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -165,8 +250,6 @@
 				871DC6AB2F63454D00CF7145 /* TibberDashboardUITests */,
 			);
 			name = TibberDashboardUITests;
-			packageProductDependencies = (
-			);
 			productName = TibberDashboardUITests;
 			productReference = 871DC6A82F63454D00CF7145 /* TibberDashboardUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -204,8 +287,6 @@
 			);
 			mainGroup = 871DC6882F63454A00CF7145;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 871DC6922F63454A00CF7145 /* Products */;
 			projectDirPath = "";
@@ -241,6 +322,117 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		25E1B0DD7245BDAEBD329C95 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TibberDashboard-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		309B97F0941DDEE6D320AFA9 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TibberDashboardTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		48F1B2459F886E17627A2D6F /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard/Pods-TibberDashboard-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard/Pods-TibberDashboard-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard/Pods-TibberDashboard-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		552383371D94BBD89AB6EE0F /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TibberDashboard-TibberDashboardUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		DB304A98F6D3BB4D9D330B42 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard-TibberDashboardUITests/Pods-TibberDashboard-TibberDashboardUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard-TibberDashboardUITests/Pods-TibberDashboard-TibberDashboardUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TibberDashboard-TibberDashboardUITests/Pods-TibberDashboard-TibberDashboardUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		871DC68D2F63454A00CF7145 /* Sources */ = {
@@ -318,7 +510,7 @@
 				DEVELOPMENT_TEAM = 3B9MVBS2CK;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -382,7 +574,7 @@
 				DEVELOPMENT_TEAM = 3B9MVBS2CK;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -404,21 +596,18 @@
 		};
 		871DC6B32F63454D00CF7145 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5289D32C5C72B28F8C055C5 /* Pods-TibberDashboard.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = TibberDashboard/TibberDashboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3B9MVBS2CK;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIRequiresFullScreen = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TibberDashboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -431,27 +620,23 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				UIRequiresFullScreen = YES;
 			};
 			name = Debug;
 		};
 		871DC6B42F63454D00CF7145 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4D7774EA6B1BC97E9FAC8109 /* Pods-TibberDashboard.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = TibberDashboard/TibberDashboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3B9MVBS2CK;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIRequiresFullScreen = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TibberDashboard/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -463,12 +648,12 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				UIRequiresFullScreen = YES;
 			};
 			name = Release;
 		};
 		871DC6B62F63454D00CF7145 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 03F2F10E0A70BA850A626BE5 /* Pods-TibberDashboardTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -488,6 +673,7 @@
 		};
 		871DC6B72F63454D00CF7145 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3A6E82A0F4B16066FBB0D0FD /* Pods-TibberDashboardTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -507,6 +693,7 @@
 		};
 		871DC6B92F63454D00CF7145 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D56A02828645FE62E026206B /* Pods-TibberDashboard-TibberDashboardUITests.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -524,6 +711,7 @@
 		};
 		871DC6BA2F63454D00CF7145 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 866B13810762D4645C0EF495 /* Pods-TibberDashboard-TibberDashboardUITests.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
