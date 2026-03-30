@@ -77,3 +77,38 @@ struct HomesData: Codable {
 struct Viewer: Codable {
     let homes: [Home]?
 }
+
+struct ConsumptionResponse: Codable {
+    let data: ConsumptionData?
+}
+
+struct ConsumptionData: Codable {
+    let viewer: ConsumptionViewer?
+}
+
+struct ConsumptionViewer: Codable {
+    let home: ConsumptionHome?
+}
+
+struct ConsumptionHome: Codable {
+    let consumption: ConsumptionConnection?
+}
+
+struct ConsumptionConnection: Codable {
+    let nodes: [HourlyConsumptionNode]?
+}
+
+struct HourlyConsumptionNode: Codable, Identifiable {
+    let from: String
+    let to: String
+    let consumption: Double?
+
+    var id: String { from }
+}
+
+struct MonthlyTopUsageCache: Codable {
+    let monthKey: String
+    let topHours: [HourlyConsumptionNode]
+    let average: Double
+    let updatedAt: Date
+}

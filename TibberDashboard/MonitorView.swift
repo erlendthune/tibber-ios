@@ -50,6 +50,17 @@ struct HelpView: View {
                             .font(.headline)
                         Text("If your hour average breaches your Critical threshold, an alarm sound will play to notify you, even if the screen is black.")
                     }
+
+                    Divider()
+
+                    Group {
+                        Text("Telegram Alerts")
+                            .font(.headline)
+                        Text("You can receive Telegram alerts when a critical threshold is triggered. Go to Settings and open Telegram (Optional).")
+                        Text("1. Find your bot token: open BotFather in Telegram, create/select your bot, and copy the HTTP API token.")
+                        Text("2. Find your chat/user ID: start a conversation with your bot, then use getUpdates (or a Telegram ID bot) to read your chat id and add it as a recipient in Settings.")
+                        Text("Important: each recipient must send at least one message to tun_dashboard_bot before the bot can send alerts to that chat.")
+                    }
                     
                     Divider()
                     
@@ -265,6 +276,9 @@ struct MonitorView: View {
             if ZaptecManager.shared.token == nil && !ZaptecManager.shared.username.isEmpty {
                 ZaptecManager.shared.authenticate()
             }
+            if store.showMonthlyTop3Usage {
+                store.refreshTopUsage()
+            }
         }
     }
     
@@ -341,92 +355,289 @@ struct MonitorView: View {
     
     @ViewBuilder
     private func statsAndLog(for data: LiveMeasurement) -> some View {
-        // Since statsAndLog is a view builder outside the main struct body, we must access ZaptecManager via its singleton to fix scope closure constraints
-        let localZaptecManager = ZaptecManager.shared
-        
         VStack(spacing: 16) {
-            // ...existing code...
-            
+            if store.showMonthlyTop3Usage {
+                TopThreeUsageCard(store: store)
+            }
+
+            if store.showWebsocketTop3Usage {
+                WebSocketTopThreeUsageCard(store: store)
+            }
+
             // Zaptec Charger Info (Optional)
-            if localZaptecManager.isAuthenticated {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image(systemName: "bolt.car")
-                            .font(.caption)
-                            .foregroundColor(localZaptecManager.isCharging ? .green : .secondary)
-                        Text("Zaptec Charger")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        
-                        if localZaptecManager.isCharging {
-                            Text("\(String(format: "%.2f", localZaptecManager.chargePower)) kW")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                                .bold()
-                        } else {
-                            Text(localZaptecManager.operationModeString)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    if localZaptecManager.isCharging {
-                        HStack {
-                            Spacer()
-                            Text("\(String(format: "%.1f", localZaptecManager.voltage))V • \(String(format: "%.2f", localZaptecManager.activeCurrent))A • Session: \(String(format: "%.2f", localZaptecManager.sessionEnergy)) kWh")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    } else if localZaptecManager.sessionEnergy > 0 {
-                        // Show session energy when finished or paused
-                         HStack {
-                             Spacer()
-                             Text("Session: \(String(format: "%.2f", localZaptecManager.sessionEnergy)) kWh")
-                                 .font(.caption2)
-                                 .foregroundColor(.secondary)
-                         }
-                    }
-                    
-                    Divider()
-                    
-                    HStack {
-                        // Current adjustment
-                        // Use pending to allow multiple taps without sending a request immediately
-                        let displayCurrent = localZaptecManager.pendingChargeCurrent ?? localZaptecManager.allowedChargeCurrent
-                        
-                        Text("\(Int(displayCurrent))A")
-                            .font(.subheadline)
-                            .frame(width: 40)
-                        
-                        let currentBinding = Binding<Double>(
-                            get: { displayCurrent },
-                            set: { newValue in
-                                localZaptecManager.pendingChargeCurrent = newValue
-                            }
-                        )
-                        
-                        Stepper("", value: currentBinding, in: 6...localZaptecManager.maxConfiguredCurrent, step: 1)
-                            .labelsHidden()
-                            
-                        // Show save button ONLY if pending value differs from actual allowed and we aren't loading
-                        if let pending = localZaptecManager.pendingChargeCurrent, Int(pending) != Int(localZaptecManager.allowedChargeCurrent) {
-                            Button(action: {
-                                localZaptecManager.updateChargeCurrent(amps: Int(pending))
-                            }) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.blue)
-                            }
-                            .padding(.leading, 5)
-                            .transition(.opacity)
-                        }
-                    }
-                }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+            if ZaptecManager.shared.isAuthenticated {
+                ZaptecControlView(manager: ZaptecManager.shared)
             }
         }
+    }
+}
+
+struct TopThreeUsageCard: View {
+    @ObservedObject var store: TibberMonitorStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Top 3 Hours This Month")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if store.isFetchingTopUsage {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+            }
+
+            Text("Source: Tibber API")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            if let error = store.topUsageError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if store.topUsageHours.isEmpty {
+                Text("No usage data available yet")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(Array(store.topUsageHours.enumerated()), id: \.element.id) { index, hour in
+                    HStack {
+                        Text("#\(index + 1)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, alignment: .leading)
+
+                        Text(formatHour(hour.from))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Text("\(hour.consumption ?? 0, specifier: "%.2f") kWh")
+                            .font(.caption)
+                            .bold()
+                    }
+                }
+
+                Divider()
+
+                HStack {
+                    Text("Average")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(store.topUsageAverage ?? 0, specifier: "%.2f") kWh")
+                        .font(.subheadline)
+                        .bold()
+                }
+
+                if let updatedAt = store.topUsageLastUpdated {
+                    Text("Updated: \(updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+    }
+
+    private func formatHour(_ iso: String) -> String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let fallback = ISO8601DateFormatter()
+        fallback.formatOptions = [.withInternetDateTime]
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+
+        if let date = parser.date(from: iso) ?? fallback.date(from: iso) {
+            return formatter.string(from: date)
+        }
+
+        return iso
+    }
+}
+
+struct WebSocketTopThreeUsageCard: View {
+    @ObservedObject var store: TibberMonitorStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Top 3 Hours This Month (WebSocket)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+
+            Text("Source: WebSocket")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            if store.websocketTopUsageHours.isEmpty {
+                Text("Collecting live data...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(Array(store.websocketTopUsageHours.enumerated()), id: \.element.id) { index, hour in
+                    HStack {
+                        Text("#\(index + 1)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 20, alignment: .leading)
+
+                        Text(formatHour(hour.from))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Text("\(hour.consumption ?? 0, specifier: "%.2f") kWh")
+                            .font(.caption)
+                            .bold()
+                    }
+                }
+
+                Divider()
+
+                HStack {
+                    Text("Average")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(store.websocketTopUsageAverage ?? 0, specifier: "%.2f") kWh")
+                        .font(.subheadline)
+                        .bold()
+                }
+
+                if let updatedAt = store.websocketTopUsageLastUpdated {
+                    Text("Updated: \(updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+    }
+
+    private func formatHour(_ iso: String) -> String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let fallback = ISO8601DateFormatter()
+        fallback.formatOptions = [.withInternetDateTime]
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+
+        if let date = parser.date(from: iso) ?? fallback.date(from: iso) {
+            return formatter.string(from: date)
+        }
+
+        return iso
+    }
+}
+
+struct ZaptecControlView: View {
+    @ObservedObject var manager: ZaptecManager
+
+    private var displayCurrent: Double {
+        manager.pendingChargeCurrent ?? manager.allowedChargeCurrent
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "bolt.car")
+                    .font(.caption)
+                    .foregroundColor(manager.isCharging ? .green : .secondary)
+                Text("Zaptec Charger")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+
+                if !manager.isChargerReachable {
+                    Label("Connection lost", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                } else if manager.isCharging {
+                    Text("\(String(format: "%.2f", manager.chargePower)) kW")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                        .bold()
+                } else {
+                    Text(manager.operationModeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if manager.isCharging {
+                HStack {
+                    Spacer()
+                    Text("\(String(format: "%.1f", manager.voltage))V • \(String(format: "%.2f", manager.activeCurrent))A • Session: \(String(format: "%.2f", manager.sessionEnergy)) kWh")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            } else if manager.sessionEnergy > 0 {
+                HStack {
+                    Spacer()
+                    Text("Session: \(String(format: "%.2f", manager.sessionEnergy)) kWh")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Text("\(Int(displayCurrent))A")
+                    .font(.subheadline)
+                    .frame(width: 40)
+
+                Stepper("", value: Binding(
+                    get: { displayCurrent },
+                    set: { manager.pendingChargeCurrent = $0 }
+                ), in: 6...manager.maxConfiguredCurrent, step: 1)
+                .labelsHidden()
+
+                if let pending = manager.pendingChargeCurrent, Int(pending) != Int(manager.allowedChargeCurrent) {
+                    Button(action: {
+                        manager.updateChargeCurrent(amps: Int(pending))
+                    }) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    .padding(.leading, 5)
+                    .transition(.opacity)
+
+                    Button(action: {
+                        manager.pendingChargeCurrent = nil
+                    }) {
+                        Image(systemName: "xmark.circle")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.leading, 2)
+                    .transition(.opacity)
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
     }
 }
 

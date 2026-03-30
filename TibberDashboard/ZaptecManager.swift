@@ -46,6 +46,7 @@ class ZaptecManager: ObservableObject {
     @Published var allowedChargeCurrent: Double = 16.0 // Added to sync UI with API value
     @Published var pendingChargeCurrent: Double? // Added to handle local stepper changes before saving
     @Published var lastChargeCurrentUpdate: Date? // Prevent updating more than once every 15 mins
+    @Published var isChargerReachable: Bool = true // False when the last poll request failed
     
     @AppStorage("zaptecMaxConfiguredCurrent") var maxConfiguredCurrent: Double = 13.0 // User configurable maximum
 
@@ -269,11 +270,15 @@ class ZaptecManager: ObservableObject {
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
                 DispatchQueue.main.async {
+                    self?.isChargerReachable = false
                     self?.monitorStore?.addConnectionLog("State error: \(error.localizedDescription)", source: "ZAPTEC")
                 }
                 return
             }
-            guard let data = data else { return }
+            guard let data = data else {
+                DispatchQueue.main.async { self?.isChargerReachable = false }
+                return
+            }
             
             // Print raw state string directly to console for debugging
             if let str = String(data: data, encoding: .utf8) {
@@ -283,6 +288,7 @@ class ZaptecManager: ObservableObject {
             do {
                 let states = try JSONDecoder().decode([ZaptecStateResponse].self, from: data)
                 DispatchQueue.main.async {
+                    self?.isChargerReachable = true
                     self?.parseStates(states)
                     self?.monitorStore?.addDataLog("State update received", source: "ZAPTEC")
                 }
@@ -292,6 +298,7 @@ class ZaptecManager: ObservableObject {
                 }
                 print("Failed to decode Zaptec state: \(error)")
                 DispatchQueue.main.async {
+                    self?.isChargerReachable = false
                     self?.monitorStore?.addConnectionLog("State decode error", source: "ZAPTEC")
                     // Log the decoding error description for easier debugging without Xcode
                     self?.monitorStore?.addConnectionLog("Error: \(error.localizedDescription)", source: "ZAPTEC")
@@ -315,7 +322,7 @@ class ZaptecManager: ObservableObject {
                         
                         let modeString: String
                         switch mode {
-                        case 1: modeString = "Disconnected"
+                        case 1: modeString = "No car connected"
                         case 2: modeString = "Waiting/Allocating"
                         case 3: modeString = "Charging"
                         case 5: modeString = "Finished/Idle"

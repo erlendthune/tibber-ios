@@ -101,8 +101,14 @@ class HueManager: ObservableObject {
     }
     
     // Trigger critical alert (flash lights)
+    private var lastAlertTime: Date = .distantPast
+    private let alertCooldown: TimeInterval = 60 // 60 seconds
+
     func triggerCriticalAlert() {
-        guard isEnabled, !bridgeIP.isEmpty, !username.isEmpty else { return } // Added isEnabled guard
+        let now = Date()
+        guard isEnabled, !bridgeIP.isEmpty, !username.isEmpty,
+              now.timeIntervalSince(lastAlertTime) >= alertCooldown else { return }
+        lastAlertTime = now
         
         // Group 0 represents all lights
         let urlString = "http://\(bridgeIP)/api/\(username)/groups/0/action"

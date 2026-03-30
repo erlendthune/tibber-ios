@@ -5,10 +5,18 @@ struct SettingsView: View {
     @ObservedObject var store: TibberMonitorStore
     @StateObject private var hueManager = HueManager.shared
     @StateObject private var zaptecManager = ZaptecManager.shared
+    @StateObject private var telegramManager = TelegramManager.shared
     
     @State private var isApiKeyVisible: Bool = false
     @State private var isHomeIdVisible: Bool = false
     @State private var isZaptecPasswordVisible: Bool = false
+    @State private var isTelegramTokenVisible: Bool = false
+    @State private var showAddTelegramRecipient: Bool = false
+    @State private var newRecipientName: String = ""
+    @State private var newRecipientChatId: String = ""
+    @State private var showTelegramTestResult: Bool = false
+    @State private var telegramTestResultTitle: String = ""
+    @State private var telegramTestResultMessage: String = ""
     
     var body: some View {
         NavigationView {
@@ -102,6 +110,64 @@ struct SettingsView: View {
                         store.breachCount = 0
                     }
                     .foregroundColor(.red)
+                }
+
+                Section(
+                    header: Text("Top 3 Hours (Current Month)"),
+                    footer: Text("You can show one or both cards on the dashboard. Tibber API card fetches historical values. WebSocket card tracks top hours continuously while this app is running.")
+                ) {
+                    Toggle("Show Tibber API Card", isOn: $store.showMonthlyTop3Usage)
+                    Toggle("Show WebSocket Card", isOn: $store.showWebsocketTop3Usage)
+
+                    if store.showMonthlyTop3Usage {
+                        Button(action: {
+                            store.refreshTopUsage(force: true)
+                        }) {
+                            HStack {
+                                Text("Refresh Top 3 Now")
+                                if store.isFetchingTopUsage {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+
+                        if let average = store.topUsageAverage {
+                            Text("Average of top \(store.topUsageHours.count): \(average, specifier: "%.2f") kWh")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let updated = store.topUsageLastUpdated {
+                            Text("Updated: \(updated.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let error = store.topUsageError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+
+                    if store.showWebsocketTop3Usage {
+                        if let average = store.websocketTopUsageAverage {
+                            Text("WebSocket average of top \(store.websocketTopUsageHours.count): \(average, specifier: "%.2f") kWh")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("WebSocket card is collecting data continuously from live measurements.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let updated = store.websocketTopUsageLastUpdated {
+                            Text("WebSocket updated: \(updated.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
                 Section(header: Text("Garage Camera (Optional)"), footer: Text("Provide RTSP URL and credentials to take a snapshot every 5 minutes.")) {
@@ -276,9 +342,105 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                Section(
+                    header: Text("Telegram (Optional)"),
+                    footer: Text("Send a Telegram message to each recipient when a critical alert is triggered. Setup: 1) Use BotFather to create/select your bot and copy the HTTP API token. 2) Start a chat with tun_dashboard_bot and send at least one message. 3) Use getUpdates (or a Telegram ID bot) to find your chat ID, then add it as a recipient.")
+                ) {
+                    Toggle("Enable Telegram Alerts", isOn: $telegramManager.isEnabled)
+
+                    HStack {
+                        if isTelegramTokenVisible {
+                            TextField("Bot Token", text: $telegramManager.botToken)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("Bot Token", text: $telegramManager.botToken)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        Button(action: {
+                            isTelegramTokenVisible.toggle()
+                        }) {
+                            Image(systemName: isTelegramTokenVisible ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    ForEach(telegramManager.chatRecipients) { recipient in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(recipient.name)
+                                Text(recipient.chatId)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button(action: {
+                                telegramManager.sendTestMessage(to: recipient) { result in
+                                    switch result {
+                                    case .success:
+                                        telegramTestResultTitle = "Test Sent"
+                                        telegramTestResultMessage = "Test message sent to \(recipient.name)."
+                                    case .failure(let error):
+                                        telegramTestResultTitle = "Test Failed"
+                                        telegramTestResultMessage = "Could not send test to \(recipient.name): \(error)"
+                                    }
+                                    showTelegramTestResult = true
+                                }
+                            }) {
+                                Label("Test", systemImage: "paperplane")
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .onDelete { offsets in
+                        telegramManager.removeRecipients(at: offsets)
+                    }
+
+                    Button(action: {
+                        newRecipientName = ""
+                        newRecipientChatId = ""
+                        showAddTelegramRecipient = true
+                    }) {
+                        Label("Add Recipient", systemImage: "plus.circle")
+                    }
+                }
             } // Form
+            .alert("Add Telegram Recipient", isPresented: $showAddTelegramRecipient) {
+                TextField("Name", text: $newRecipientName)
+                TextField("Chat ID", text: $newRecipientChatId)
+                    .keyboardType(.numbersAndPunctuation)
+                Button("Add") {
+                    let trimmedName = newRecipientName.trimmingCharacters(in: .whitespaces)
+                    let trimmedId = newRecipientChatId.trimmingCharacters(in: .whitespaces)
+                    if !trimmedName.isEmpty && !trimmedId.isEmpty {
+                        telegramManager.addRecipient(name: trimmedName, chatId: trimmedId)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Enter a display name and the Telegram chat ID.")
+            }
+            .alert(telegramTestResultTitle, isPresented: $showTelegramTestResult) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(telegramTestResultMessage)
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if store.showMonthlyTop3Usage {
+                    store.refreshTopUsage()
+                }
+            }
+            .onChange(of: store.showMonthlyTop3Usage) { enabled in
+                if enabled {
+                    store.refreshTopUsage()
+                } else {
+                    store.clearTopUsageDisplay()
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
