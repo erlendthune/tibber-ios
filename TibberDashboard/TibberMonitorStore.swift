@@ -75,6 +75,10 @@ class TibberMonitorStore: ObservableObject {
         loadWebsocketTopUsageFromCacheIfValid()
     }
 
+    private func tlog(_ message: String) {
+        AppLog.debug(.tibber, message)
+    }
+
     func refreshTopUsage(force: Bool = false) {
         resetTopUsageIfNeeded()
 
@@ -476,18 +480,18 @@ class TibberMonitorStore: ObservableObject {
     }
 
     private func logTopUsageRawToConsole(_ raw: String, source: String) {
-        print("TOP_USAGE_RAW_\(source.uppercased())_START")
-        print(raw)
-        print("TOP_USAGE_RAW_\(source.uppercased())_END")
+        tlog("TOP_USAGE_RAW_\(source.uppercased())_START")
+        tlog(raw)
+        tlog("TOP_USAGE_RAW_\(source.uppercased())_END")
     }
 
     private func logTopUsageNodesToConsole(_ nodes: [HourlyConsumptionNode], source: String) {
-        print("TOP_USAGE_POINTS_\(source.uppercased())_START count=\(nodes.count)")
+        tlog("TOP_USAGE_POINTS_\(source.uppercased())_START count=\(nodes.count)")
         for (idx, node) in nodes.enumerated() {
             let value = node.consumption.map { String(format: "%.4f", $0) } ?? "nil"
-            print("[\(idx)] from=\(node.from) to=\(node.to) consumption=\(value)")
+            tlog("[\(idx)] from=\(node.from) to=\(node.to) consumption=\(value)")
         }
-        print("TOP_USAGE_POINTS_\(source.uppercased())_END")
+        tlog("TOP_USAGE_POINTS_\(source.uppercased())_END")
     }
 
     private func extractConsumptionNodes(from root: [String: Any]) -> [HourlyConsumptionNode] {
@@ -674,13 +678,13 @@ class TibberMonitorStore: ObservableObject {
     func connect() {
         // Prevent multiple simultaneous connection attempts
         guard !isConnecting else {
-            print("Already connecting, skipping duplicate connection attempt")
+            tlog("Already connecting, skipping duplicate connection attempt")
             return
         }
         
         // If already connected, don't reconnect
         if isConnected {
-            print("Already connected, skipping connection attempt")
+            tlog("Already connected, skipping connection attempt")
             return
         }
         
@@ -704,9 +708,9 @@ class TibberMonitorStore: ObservableObject {
         request.setValue("AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
         // Note: Authorization header is not needed when sending token in connection_init payload
 
-        print("Attempting WebSocket connection to: \(url)")
-        print("API Key being used: \(apiKey)")
-        print("Home ID being used: \(homeId)")
+        tlog("Attempting WebSocket connection to: \(url)")
+        tlog("API Key being used: \(apiKey)")
+        tlog("Home ID being used: \(homeId)")
         self.logger.info("Attempting WebSocket connection to Tibber API")
         
         webSocketTask = urlSession.webSocketTask(with: request)
@@ -727,7 +731,7 @@ class TibberMonitorStore: ObservableObject {
                 "payload": ["token": self.apiKey]
             ]
             
-            print("Sending connection_init message with token: \(self.apiKey)")
+            tlog("Sending connection_init message with token: \(self.apiKey)")
             self.sendMessage(initMessage)
         }
     }
@@ -750,17 +754,17 @@ class TibberMonitorStore: ObservableObject {
     private func sendMessage(_ dictionary: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
               let jsonString = String(data: data, encoding: .utf8) else { 
-            print("Failed to serialize message")
+            tlog("Failed to serialize message")
             return 
         }
         
-        print("Sending message: \(jsonString)")
+        tlog("Sending message: \(jsonString)")
         webSocketTask?.send(.string(jsonString)) { [weak self] error in
             if let error = error {
-                print("Failed to send message: \(error)")
+                self?.tlog("Failed to send message: \(error)")
                 self?.logger.error("Failed to send message: \(error.localizedDescription)")
             } else {
-                print("Message sent successfully")
+                self?.tlog("Message sent successfully")
             }
         }
     }
@@ -783,7 +787,7 @@ class TibberMonitorStore: ObservableObject {
         }
         """
         
-        print("Subscribing with query: \(query)")
+        tlog("Subscribing with query: \(query)")
         
         let startMessage: [String: Any] = [
             "id": "1",
@@ -799,7 +803,7 @@ class TibberMonitorStore: ObservableObject {
             
             switch result {
             case .failure(let error):
-                print("WebSocket receive error: \(error)")
+                tlog("WebSocket receive error: \(error)")
                 self.logger.error("WebSocket receive error: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.isConnected = false
@@ -812,11 +816,11 @@ class TibberMonitorStore: ObservableObject {
             case .success(let message):
                 switch message {
                 case .string(let text):
-                    print("WebSocket message received: \(text)")
+                    tlog("WebSocket message received: \(text)")
                     self.handleMessage(text)
                 case .data(let data):
                     if let text = String(data: data, encoding: .utf8) {
-                        print("WebSocket data received: \(text)")
+                        tlog("WebSocket data received: \(text)")
                         self.handleMessage(text)
                     }
                 @unknown default:
@@ -839,7 +843,7 @@ class TibberMonitorStore: ObservableObject {
         
         switch type {
         case "connection_ack":
-            print("Connection acknowledged by server")
+            tlog("Connection acknowledged by server")
             DispatchQueue.main.async {
                 self.isConnecting = false
                 self.isConnected = true
@@ -866,36 +870,36 @@ class TibberMonitorStore: ObservableObject {
                     }
                 }
             } catch {
-                print("Decode error: \(error)")
+                tlog("Decode error: \(error)")
             }
             
         case "error":
-            print("GraphQL Error: \(dict)")
+            tlog("GraphQL Error: \(dict)")
             if let errorMsg = dict["payload"] as? [String: Any] {
-                print("Error details: \(errorMsg)")
+                tlog("Error details: \(errorMsg)")
             }
             
         case "ping":
-            print("Received ping, sending pong")
+            tlog("Received ping, sending pong")
             self.sendMessage(["type": "pong"])
             DispatchQueue.main.async {
                 self.addConnectionLog("Keep-alive (ping) received")
             }
             
         case "ka":
-            print("Received keep-alive (ka)")
+            tlog("Received keep-alive (ka)")
             DispatchQueue.main.async {
                 self.addConnectionLog("Keep-alive (ka) received")
             }
             
         case "pong":
-            print("Received pong")
+            tlog("Received pong")
             DispatchQueue.main.async {
                 self.addConnectionLog("Keep-alive (pong) received")
             }
             
         default:
-            print("Received unknown message type: \(type)")
+            tlog("Received unknown message type: \(type)")
             DispatchQueue.main.async {
                 // Log unknown message types so they can be seen in the UI's connection log
                 self.addConnectionLog("Unknown msg type: \(type)")
@@ -1013,7 +1017,7 @@ class TibberMonitorStore: ObservableObject {
         reconnectAttempt += 1
         
         let logMsg = "Triggering reconnect in \(String(format: "%.1f", delay))s (Attempt \(reconnectAttempt))"
-        print(logMsg)
+        tlog(logMsg)
         
         DispatchQueue.main.async { [weak self] in
             self?.addConnectionLog("Delaying: \(String(format: "%.1f", delay))s")

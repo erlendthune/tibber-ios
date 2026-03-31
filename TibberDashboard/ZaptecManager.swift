@@ -75,7 +75,7 @@ class ZaptecManager: ObservableObject {
         let bodyString = "grant_type=password&username=\(username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&password=\(password.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
         request.httpBody = bodyString.data(using: .utf8)
         
-        print("Zaptec auth attempting with email: \(username)")
+        AppLog.debug(.zaptec, "Zaptec auth attempting with email: \(username)")
         DispatchQueue.main.async {
             self.monitorStore?.addConnectionLog("Auth attempt...", source: "ZAPTEC")
         }
@@ -83,13 +83,13 @@ class ZaptecManager: ObservableObject {
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("Zaptec Auth Error: \(error.localizedDescription)")
+                    AppLog.debug(.zaptec, "Zaptec Auth Error: \(error.localizedDescription)")
                     self?.authError = "Failed: \(error.localizedDescription)"
                     return
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Zaptec Auth HTTP Status: \(httpResponse.statusCode)")
+                    AppLog.debug(.zaptec, "Zaptec Auth HTTP Status: \(httpResponse.statusCode)")
                 }
                 
                 guard let data = data else { 
@@ -98,7 +98,7 @@ class ZaptecManager: ObservableObject {
                 }
                 
                 if let rawJson = String(data: data, encoding: .utf8) {
-                    print("Zaptec Auth Raw Response: \(rawJson)")
+                    AppLog.debug(.zaptec, "Zaptec Auth Raw Response: \(rawJson)")
                 }
                 
                 do {
@@ -108,7 +108,7 @@ class ZaptecManager: ObservableObject {
                             self?.isAuthenticated = true
                             self?.authError = nil
                             self?.startPolling()
-                            print("Zaptec Auth Successful")
+                            AppLog.debug(.zaptec, "Zaptec Auth Successful")
                             self?.monitorStore?.addConnectionLog("Connected", source: "ZAPTEC")
                         } else if let errorDesc = json["error_description"] as? String {
                             self?.authError = errorDesc
@@ -120,7 +120,7 @@ class ZaptecManager: ObservableObject {
                         self?.authError = "Invalid JSON response"
                     }
                 } catch {
-                    print("Zaptec Auth Parse Error: \(error)")
+                    AppLog.debug(.zaptec, "Zaptec Auth Parse Error: \(error)")
                     self?.authError = "Parse error"
                 }
             }
@@ -174,10 +174,10 @@ class ZaptecManager: ObservableObject {
                 
                 // Debug raw response
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Zaptec Chargers HTTP Status: \(httpResponse.statusCode)")
+                    AppLog.debug(.zaptec, "Zaptec Chargers HTTP Status: \(httpResponse.statusCode)")
                 }
                 if let rawData = data, let str = String(data: rawData, encoding: .utf8) {
-                    print("Zaptec Chargers Raw JSON: \(str)")
+                    AppLog.debug(.zaptec, "Zaptec Chargers Raw JSON: \(str)")
                 }
                 
                 guard let data = data, !data.isEmpty else {
@@ -207,7 +207,7 @@ class ZaptecManager: ObservableObject {
                     }
                 } catch {
                     self?.fetchChargersError = "Failed to parse chargers."
-                    print("Parse chargers error: \(error)")
+                    AppLog.debug(.zaptec, "Parse chargers error: \(error)")
                 }
             }
         }.resume()
@@ -234,10 +234,10 @@ class ZaptecManager: ObservableObject {
         
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let httpResponse = response as? HTTPURLResponse {
-                print("Zaptec Installation Details HTTP Status: \(httpResponse.statusCode)")
+                AppLog.debug(.zaptec, "Zaptec Installation Details HTTP Status: \(httpResponse.statusCode)")
             }
             if let rawData = data, let str = String(data: rawData, encoding: .utf8) {
-                print("Zaptec Installation Details Raw JSON: \(str)")
+                AppLog.debug(.zaptec, "Zaptec Installation Details Raw JSON: \(str)")
             }
             
             guard let data = data else { return }
@@ -256,7 +256,7 @@ class ZaptecManager: ObservableObject {
                     }
                 }
             } catch {
-                print("Failed to decode Zaptec installation details: \(error)")
+                AppLog.debug(.zaptec, "Failed to decode Zaptec installation details: \(error)")
             }
         }.resume()
     }
@@ -282,7 +282,7 @@ class ZaptecManager: ObservableObject {
             
             // Print raw state string directly to console for debugging
             if let str = String(data: data, encoding: .utf8) {
-                print("Zaptec Raw state: \(str)")
+                AppLog.debug(.zaptec, "Zaptec Raw state: \(str)")
             }
             
             do {
@@ -294,9 +294,9 @@ class ZaptecManager: ObservableObject {
                 }
             } catch {
                 if let str = String(data: data, encoding: .utf8) {
-                    print("Raw state: \(str)")
+                    AppLog.debug(.zaptec, "Raw state: \(str)")
                 }
-                print("Failed to decode Zaptec state: \(error)")
+                AppLog.debug(.zaptec, "Failed to decode Zaptec state: \(error)")
                 DispatchQueue.main.async {
                     self?.isChargerReachable = false
                     self?.monitorStore?.addConnectionLog("State decode error", source: "ZAPTEC")
@@ -335,7 +335,7 @@ class ZaptecManager: ObservableObject {
                         }
                     } else {
                         // Debug if casting completely fails
-                        print("Failed to decode Zaptec mode from string: \(val)")
+                        AppLog.debug(.zaptec, "Failed to decode Zaptec mode from string: \(val)")
                     }
                 }
             }
@@ -393,7 +393,7 @@ class ZaptecManager: ObservableObject {
             
             // Check raw settings for debugging empty or unexpected formats
             if let str = String(data: data, encoding: .utf8) {
-                print("Zaptec Settings Raw JSON: \(str)")
+                AppLog.debug(.zaptec, "Zaptec Settings Raw JSON: \(str)")
             }
             
             do {
@@ -418,11 +418,11 @@ class ZaptecManager: ObservableObject {
                             }
                         }
                     } else {
-                        print("Zaptec Setting 510 (Max Current) not found in response.")
+                        AppLog.debug(.zaptec, "Zaptec Setting 510 (Max Current) not found in response.")
                     }
                 }
             } catch {
-                print("Failed to decode Zaptec settings: \(error)")
+                AppLog.debug(.zaptec, "Failed to decode Zaptec settings: \(error)")
             }
         }.resume()
     }
@@ -449,7 +449,7 @@ class ZaptecManager: ObservableObject {
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Zaptec SendCommand \(commandId) HTTP Status: \(httpResponse.statusCode)")
+                    AppLog.debug(.zaptec, "Zaptec SendCommand \(commandId) HTTP Status: \(httpResponse.statusCode)")
                     await MainActor.run {
                         ZaptecManager.shared.monitorStore?.addConnectionLog("Cmd \(commandId) return \(httpResponse.statusCode)", source: "ZAPTEC")
                     }
@@ -458,7 +458,7 @@ class ZaptecManager: ObservableObject {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 self.fetchState()
             } catch {
-                print("Zaptec SendCommand Error: \(error)")
+                AppLog.debug(.zaptec, "Zaptec SendCommand Error: \(error)")
             }
         }
     }
@@ -503,7 +503,7 @@ class ZaptecManager: ObservableObject {
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Zaptec UpdateCurrent (\(clampedAmps)A) HTTP Status: \(httpResponse.statusCode)")
+                    AppLog.debug(.zaptec, "Zaptec UpdateCurrent (\(clampedAmps)A) HTTP Status: \(httpResponse.statusCode)")
                     await MainActor.run {
                         self.monitorStore?.addConnectionLog("Set \(clampedAmps)A return \(httpResponse.statusCode)", source: "ZAPTEC")
                     }
@@ -511,7 +511,7 @@ class ZaptecManager: ObservableObject {
                     self.fetchInstallationDetails()
                 }
             } catch {
-                print("Zaptec UpdateCurrent Error: \(error)")
+                AppLog.debug(.zaptec, "Zaptec UpdateCurrent Error: \(error)")
             }
         }
     }

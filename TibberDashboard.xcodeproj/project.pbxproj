@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		297D92559CF7EE5CA1AB295D /* Pods_TibberDashboard_TibberDashboardUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4600157677ACF44FFDD4FBB7 /* Pods_TibberDashboard_TibberDashboardUITests.framework */; };
 		637116366997C8023CFCAAE5 /* Pods_TibberDashboard.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51E4434AE1EC45B4E6F8717 /* Pods_TibberDashboard.framework */; };
+		87A834182F7C558F0066989E /* garagedoorclassifier.mlmodel in Sources */ = {isa = PBXBuildFile; fileRef = 87A834172F7C558F0066989E /* garagedoorclassifier.mlmodel */; };
 		BCF12F6D8FD45EEED41B296E /* Pods_TibberDashboardTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB7A341050A45FBCEE4043B5 /* Pods_TibberDashboardTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +39,7 @@
 		871DC6912F63454A00CF7145 /* TibberDashboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TibberDashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		871DC69E2F63454D00CF7145 /* TibberDashboardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TibberDashboardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		871DC6A82F63454D00CF7145 /* TibberDashboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TibberDashboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		87A834172F7C558F0066989E /* garagedoorclassifier.mlmodel */ = {isa = PBXFileReference; lastKnownFileType = file.mlmodel; path = garagedoorclassifier.mlmodel; sourceTree = "<group>"; };
 		87D7516D2F7311D9006EBAFB /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		87D7516F2F7311E2006EBAFB /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		87D751712F7311EC006EBAFB /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = System/Library/Frameworks/CFNetwork.framework; sourceTree = SDKROOT; };
@@ -143,6 +145,7 @@
 				877C42552F68B56D006C9FFB /* Frameworks */,
 				871DC6922F63454A00CF7145 /* Products */,
 				643B7EF4EA3D11BD65328E72 /* Pods */,
+				87A834172F7C558F0066989E /* garagedoorclassifier.mlmodel */,
 			);
 			sourceTree = "<group>";
 		};
@@ -439,6 +442,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				87A834182F7C558F0066989E /* garagedoorclassifier.mlmodel in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

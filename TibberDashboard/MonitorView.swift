@@ -95,6 +95,7 @@ struct HelpView: View {
 
 struct MonitorView: View {
     @ObservedObject var store: TibberMonitorStore
+    @ObservedObject private var garageDoorDetector = GarageDoorDetector.shared
     @State private var showingSettings = false
     @State private var showingHelp = false
     @State private var showingLogs = false
@@ -197,11 +198,19 @@ struct MonitorView: View {
                         Button(action: {
                             showingCamera = true
                         }) {
-                            Image(systemName: "video.circle")
-                                .font(.title2)
-                                .foregroundColor(.primary)
-                                .padding(.vertical)
-                                .padding(.horizontal, 8)
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "video.circle")
+                                    .font(.title2)
+                                    .foregroundColor(.primary)
+                                    .padding(.vertical)
+                                    .padding(.horizontal, 8)
+                                if garageDoorDetector.doorState != .unknown {
+                                    Circle()
+                                        .fill(garageDoorDetector.doorState == .open ? Color.orange : Color.green)
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: 4, y: 6)
+                                }
+                            }
                         }
                         .disabled(store.isScreensaverActive)
                     }
@@ -356,6 +365,15 @@ struct MonitorView: View {
     @ViewBuilder
     private func statsAndLog(for data: LiveMeasurement) -> some View {
         VStack(spacing: 16) {
+            if !showingCamera && !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
+                GarageDoorCameraCard(
+                    cameraUrl: cameraUrl,
+                    cameraUsername: cameraUsername,
+                    cameraPassword: cameraPassword,
+                    detector: garageDoorDetector
+                )
+            }
+
             if store.showMonthlyTop3Usage {
                 TopThreeUsageCard(store: store)
             }
@@ -369,6 +387,119 @@ struct MonitorView: View {
                 ZaptecControlView(manager: ZaptecManager.shared)
             }
         }
+    }
+}
+
+struct GarageDoorCameraCard: View {
+    let cameraUrl: String
+    let cameraUsername: String
+    let cameraPassword: String
+    @ObservedObject var detector: GarageDoorDetector
+    @State private var statusMessage: String? = "Connecting..."
+    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
+    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
+    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "door.garage.closed")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Garage Door")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if detector.doorState != .unknown {
+                    Text(detector.doorState == .open ? "OPEN" : "CLOSED")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(detector.doorState == .open ? .orange : .green)
+                } else if detector.isEnabled {
+                    Text("DETECTING")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            let rtspUrl = constructRtspUrl()
+            if rtspUrl.isEmpty {
+                Text("Camera URL not configured")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else {
+                CameraView(
+                    url: rtspUrl,
+                    statusMessage: $statusMessage,
+                    onSnapshot: { path in detector.analyze(imagePath: path) },
+                    snapshotInterval: TimeInterval(max(1, detectionInterval)),
+                    networkCachingMs: cameraNetworkCachingMs,
+                    liveCachingMs: cameraLiveCachingMs
+                )
+                .frame(height: 170)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                HStack(alignment: .center, spacing: 10) {
+                    Group {
+                        if let image = detector.lastSnapshot {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            ZStack {
+                                Color(.systemGray5)
+                                Image(systemName: "photo")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .frame(width: 84, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(detector.doorState == .unknown ? "State: Unknown" : "State: \(detector.doorState == .open ? "Open" : "Closed")")
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        Text("Confidence: \(Int(detector.confidence * 100))%")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        if let date = detector.lastSnapshotDate {
+                            Text("Updated: \(date.formatted(date: .omitted, time: .standard))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Updated: --")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+    }
+
+    private func constructRtspUrl() -> String {
+        guard !cameraUrl.isEmpty, !cameraUsername.isEmpty, !cameraPassword.isEmpty else {
+            return ""
+        }
+        var urlPart = cameraUrl
+        if let rangeOfScheme = urlPart.range(of: "rtsp://") {
+            urlPart.removeSubrange(urlPart.startIndex..<rangeOfScheme.upperBound)
+        }
+        if let atIndex = urlPart.firstIndex(of: "@") {
+            urlPart.removeSubrange(urlPart.startIndex...atIndex)
+        }
+        return "rtsp://\(cameraUsername):\(cameraPassword)@\(urlPart)"
     }
 }
 
@@ -714,6 +845,10 @@ struct CameraViewSheet: View {
     let cameraUsername: String
     let cameraPassword: String
     @State private var statusMessage: String? = "Connecting..."
+    @ObservedObject private var detector = GarageDoorDetector.shared
+    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
+    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
+    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
 
     var body: some View {
         NavigationView {
@@ -728,7 +863,37 @@ struct CameraViewSheet: View {
                         .foregroundColor(.red)
                         .padding()
                 } else {
-                    CameraView(url: rtspUrl, statusMessage: $statusMessage)
+                    CameraView(
+                        url: rtspUrl,
+                        statusMessage: $statusMessage,
+                        onSnapshot: nil,
+                        snapshotInterval: TimeInterval(detectionInterval),
+                        networkCachingMs: cameraNetworkCachingMs,
+                        liveCachingMs: cameraLiveCachingMs
+                    )
+
+                    // Door state overlay — top of screen
+                    if detector.doorState != .unknown {
+                        VStack {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(detector.doorState == .open ? Color.orange : Color.green)
+                                    .frame(width: 10, height: 10)
+                                Text(detector.doorState == .open ? "Open" : "Closed")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                Text(String(format: "%.0f%%", detector.confidence * 100))
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                            .padding(.top, 8)
+                            Spacer()
+                        }
+                    }
 
                     // Status / error overlay
                     if let message = statusMessage {

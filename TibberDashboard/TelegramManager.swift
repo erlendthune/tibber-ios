@@ -57,6 +57,43 @@ class TelegramManager: ObservableObject {
         case failure(String)
     }
 
+    // MARK: - Garage Door Alerts
+
+    private var lastGarageDoorAlertTime: Date = .distantPast
+    private var lastAlertedDoorState: Bool? = nil
+    private let garageDoorAlertCooldown: TimeInterval = 5 * 60 // 5 minutes
+
+    func notifyGarageDoor(isOpen: Bool) {
+        guard isEnabled, !botToken.isEmpty else { return }
+
+        let now = Date()
+        // Always send on state change; apply cooldown only for repeated same-state alerts
+        if lastAlertedDoorState == isOpen {
+            guard now.timeIntervalSince(lastGarageDoorAlertTime) >= garageDoorAlertCooldown else { return }
+        }
+        lastGarageDoorAlertTime = now
+        lastAlertedDoorState = isOpen
+
+        let stateText = isOpen ? "OPEN" : "CLOSED"
+        let text = "🚗 *Garage door is now \(stateText)*"
+
+        for recipient in chatRecipients {
+            guard !recipient.chatId.isEmpty else { continue }
+
+            let urlString = "https://api.telegram.org/bot\(botToken)/sendMessage?chat_id=\(recipient.chatId)&text=\(text)&parse_mode=Markdown"
+            guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let url = URL(string: encoded) else { continue }
+
+            URLSession.shared.dataTask(with: url) { _, _, error in
+                if let error = error {
+                    print("Garage door Telegram alert failed for \(recipient.name): \(error.localizedDescription)")
+                } else {
+                    print("Garage door alert (\(stateText)) sent to \(recipient.name)!")
+                }
+            }.resume()
+        }
+    }
+
     func notifyTelegram(powerValue: Double) {
         guard isEnabled, !botToken.isEmpty else { return }
 

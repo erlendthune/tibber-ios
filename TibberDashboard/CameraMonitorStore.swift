@@ -9,9 +9,18 @@ import MobileVLCKit
 struct CameraView: UIViewRepresentable {
     let url: String
     @Binding var statusMessage: String?
+    var onSnapshot: ((String) -> Void)? = nil
+    var snapshotInterval: TimeInterval = 5
+    var networkCachingMs: Int = 1000
+    var liveCachingMs: Int = 1000
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(statusMessage: $statusMessage)
+        let coordinator = Coordinator(statusMessage: $statusMessage)
+        coordinator.onSnapshot = onSnapshot
+        coordinator.snapshotInterval = snapshotInterval
+        coordinator.networkCachingMs = networkCachingMs
+        coordinator.liveCachingMs = liveCachingMs
+        return coordinator
     }
 
     func makeUIView(context: Context) -> UIView {
@@ -21,7 +30,21 @@ struct CameraView: UIViewRepresentable {
         return videoView
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.updateConfiguration(
+            url: url,
+            drawableView: uiView,
+            onSnapshot: onSnapshot,
+            snapshotInterval: snapshotInterval,
+            networkCachingMs: networkCachingMs,
+            liveCachingMs: liveCachingMs
+        )
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        // Ensure VLC is fully detached before SwiftUI removes the view.
+        coordinator.stop()
+    }
 
     func takeSnapshot(context: Context) {
         let path = NSTemporaryDirectory() + "snapshot.png"
@@ -40,13 +63,26 @@ struct CameraView: UIViewRepresentable {
         private var pathMonitor: NWPathMonitor?
         private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "TibberDashboard", category: "CameraView")
 
+        // Garage door detection
+        var onSnapshot: ((String) -> Void)? = nil
+        var snapshotInterval: TimeInterval = 5
+        var networkCachingMs: Int = 1000
+        var liveCachingMs: Int = 1000
+        private var snapshotTimer: Timer? = nil
+        private var snapshotTickCount: Int = 0
+        private var lastPlayingAt: Date = .distantPast
+        private var isActive: Bool = false
+
         init(statusMessage: Binding<String?>) {
             _statusMessage = statusMessage
         }
 
         func start(url: String, drawableView: UIView) {
+            stop()
+            isActive = true
             self.streamUrl = url
             self.drawableView = drawableView
+            AppLog.info(.camera, "CameraView.start called. interval=\(snapshotInterval)s hasSnapshotCallback=\(onSnapshot != nil) networkCachingMs=\(networkCachingMs) liveCachingMs=\(liveCachingMs)")
 
             // Wait for a valid network path (non-0.0.0.0) before handing
             // the URL to VLC — otherwise VLC logs "invalid IP address: 0.0.0.0"
@@ -55,18 +91,82 @@ struct CameraView: UIViewRepresentable {
             self.pathMonitor = monitor
             monitor.pathUpdateHandler = { [weak self] path in
                 guard let self else { return }
+                guard self.isActive else { return }
                 guard path.status == .satisfied else { return }
                 monitor.cancel()
                 self.pathMonitor = nil
                 self.logger.debug("rtsp: network ready, connecting")
+                AppLog.debug(.camera, "Network path satisfied. Proceeding to connect RTSP stream.")
                 DispatchQueue.main.async { self.connect() }
             }
             monitor.start(queue: DispatchQueue.global(qos: .utility))
         }
 
+        func updateConfiguration(
+            url: String,
+            drawableView: UIView,
+            onSnapshot: ((String) -> Void)?,
+            snapshotInterval: TimeInterval,
+            networkCachingMs: Int,
+            liveCachingMs: Int
+        ) {
+            let shouldReconnect = self.streamUrl != url
+                || self.networkCachingMs != networkCachingMs
+                || self.liveCachingMs != liveCachingMs
+            
+            let intervalChanged = snapshotInterval != self.snapshotInterval
+
+            self.drawableView = drawableView
+            self.onSnapshot = onSnapshot
+            self.snapshotInterval = snapshotInterval
+            self.networkCachingMs = networkCachingMs
+            self.liveCachingMs = liveCachingMs
+
+            if shouldReconnect, isActive {
+                AppLog.info(.camera, "CameraView configuration changed. Reconnecting stream with updated settings.")
+                start(url: url, drawableView: drawableView)
+                return
+            }
+
+            if intervalChanged && snapshotTimer != nil {
+                AppLog.debug(.camera, "CameraView snapshot interval updated to \(snapshotInterval)s")
+                startSnapshotTimer()
+            }
+        }
+
+        func stop() {
+            isActive = false
+            reconnectTimer?.invalidate()
+            reconnectTimer = nil
+            snapshotTimer?.invalidate()
+            snapshotTimer = nil
+            pathMonitor?.cancel()
+            pathMonitor = nil
+            connectRetries = 0
+
+            // Stop playback immediately on main thread to halt render thread
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.mediaPlayer?.stop()
+            }
+            
+            // Detach drawable and delegate to reduce off-main-thread layer mutations.
+            // Do this after a brief delay to let the stop() propagate.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self = self else { return }
+                self.mediaPlayer?.delegate = nil
+                self.mediaPlayer?.drawable = nil
+                self.mediaPlayer = nil
+                self.drawableView = nil
+            }
+
+            AppLog.debug(.camera, "CameraView.stop completed")
+        }
+
         private var connectRetries = 0
 
         private func connect() {
+            guard isActive else { return }
             reconnectTimer?.invalidate()
             reconnectTimer = nil
 
@@ -75,6 +175,7 @@ struct CameraView: UIViewRepresentable {
             // background pthread will modify layer properties off the main thread.
             if drawableView?.window == nil {
                 connectRetries += 1
+                AppLog.debug(.camera, "Drawable has no window yet. retry=\(connectRetries)")
                 if connectRetries < 20 { // retry up to ~2 seconds
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                         self?.connect()
@@ -82,11 +183,13 @@ struct CameraView: UIViewRepresentable {
                     return
                 }
                 logger.warning("rtsp: drawable view still has no window after retries, proceeding anyway")
+                AppLog.warning(.camera, "Drawable still has no window after retries; continuing anyway.")
             }
             connectRetries = 0
 
             guard let streamUrl = URL(string: streamUrl) else {
                 logger.error("rtsp: Invalid URL: \(self.streamUrl, privacy: .public)")
+                AppLog.error(.camera, "Invalid RTSP URL format: \(self.streamUrl)")
                 DispatchQueue.main.async { self.statusMessage = "Invalid URL" }
                 return
             }
@@ -103,8 +206,11 @@ struct CameraView: UIViewRepresentable {
             // "invalid IP address: 0.0.0.0" error (VLC won't try to open UDP ports).
             // MobileVLCKit addOption() uses ":" prefix, not "--".
             media.addOption(":rtsp-tcp")
-            media.addOption(":network-caching=150")
-            media.addOption(":live-caching=150")
+            media.addOption(":network-caching=\(networkCachingMs)")
+            media.addOption(":live-caching=\(liveCachingMs)")
+            // Improve snapshot reliability on iOS by forcing software decode.
+            media.addOption(":no-hw-dec")
+            media.addOption(":no-videotoolbox")
             media.addOption(":drop-late-frames")
             media.addOption(":skip-frames")
             media.addOption(":clock-jitter=0")
@@ -113,40 +219,138 @@ struct CameraView: UIViewRepresentable {
             player.media = media
             player.play()
             logger.debug("rtsp: connecting to \(self.streamUrl, privacy: .public)")
+            AppLog.info(.camera, "VLC play() issued for stream. networkCachingMs=\(networkCachingMs) liveCachingMs=\(liveCachingMs)")
 
             // If still not playing after 10 s, reconnect automatically
             reconnectTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
-                guard let self, self.mediaPlayer?.state != .playing else { return }
+                guard let self, self.isActive, self.mediaPlayer?.state != .playing else { return }
                 self.logger.debug("rtsp: reconnect triggered (was not playing after 10s)")
-                print("[rtsp] Reconnecting...")
+                AppLog.warning(.camera, "Reconnect timer fired. Player not in .playing state after 10s.")
                 self.mediaPlayer?.stop()
                 self.mediaPlayer = nil
                 self.connect()
             }
         }
 
+        private func startSnapshotTimer() {
+            snapshotTimer?.invalidate()
+            snapshotTickCount = 0
+            guard onSnapshot != nil else {
+                AppLog.debug(.camera, "Snapshot timer not started: onSnapshot callback is nil.")
+                return
+            }
+            AppLog.info(.camera, "Starting snapshot timer at interval=\(snapshotInterval)s")
+            snapshotTimer = Timer.scheduledTimer(withTimeInterval: snapshotInterval, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.snapshotTickCount += 1
+                guard self.isActive else {
+                    AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: coordinator inactive")
+                    return
+                }
+                guard let player = self.mediaPlayer else {
+                    AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: no mediaPlayer")
+                    return
+                }
+                guard let drawable = self.drawableView, drawable.window != nil else {
+                    AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: drawable not in window hierarchy")
+                    return
+                }
+                // RTSP streams often don't reach state==.playing due to continuous buffering.
+                // Check numberOfVideoTracks: if > 0, the video stream is actively being decoded.
+                guard player.numberOfVideoTracks > 0 else {
+                    AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: no video tracks detected yet (state=\(self.describe(state: player.state)))")
+                    return
+                }
+                let stableSeconds = Date().timeIntervalSince(self.lastPlayingAt)
+                guard stableSeconds >= 3.0 else {
+                    AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: stream not stable yet (\(String(format: "%.2f", stableSeconds))s)")
+                    return
+                }
+                let path = NSTemporaryDirectory() + "garage_snapshot.png"
+                try? FileManager.default.removeItem(atPath: path)
+                player.saveVideoSnapshot(at: path, withWidth: 0, andHeight: 0)
+                AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount): snapshot requested (videoTracks=\(player.numberOfVideoTracks))")
+            }
+        }
+
         func mediaPlayerStateChanged(_ aNotification: Notification) {
+            guard isActive else { return }
             guard let player = aNotification.object as? VLCMediaPlayer else { return }
             let state = player.state
             let stateDescription: String
             switch state {
             case .opening:    stateDescription = "Opening stream..."
-            case .buffering:  stateDescription = "Buffering..."
+            case .buffering:
+                // For RTSP streams, buffering is normal even when video is visible.
+                // If video tracks are detected but timer isn't started yet, start now.
+                if player.numberOfVideoTracks > 0 && snapshotTimer == nil && onSnapshot != nil {
+                    AppLog.info(.camera, "Stream has video tracks during buffering state; starting snapshot timer (videoTracks=\(player.numberOfVideoTracks))")
+                    lastPlayingAt = Date()
+                    DispatchQueue.main.async { self.startSnapshotTimer() }
+                }
+                stateDescription = "Buffering..."
             case .playing:
                 reconnectTimer?.invalidate()
                 reconnectTimer = nil
+                lastPlayingAt = Date()
                 logger.debug("rtsp: playing")
-                DispatchQueue.main.async { self.statusMessage = nil }
+                AppLog.info(.camera, "Player entered .playing state")
+                DispatchQueue.main.async {
+                    self.statusMessage = nil
+                    self.startSnapshotTimer()
+                }
                 return
             case .paused:     stateDescription = "Paused"
-            case .stopped:    stateDescription = "Stopped"
-            case .error:      stateDescription = "Stream error — check URL and credentials"
-            case .ended:      stateDescription = "Stream ended"
+            case .stopped:
+                snapshotTimer?.invalidate()
+                snapshotTimer = nil
+                AppLog.debug(.camera, "Player stopped. Snapshot timer invalidated.")
+                stateDescription = "Stopped"
+            case .error:
+                snapshotTimer?.invalidate()
+                snapshotTimer = nil
+                AppLog.error(.camera, "Player error state reached. Snapshot timer invalidated.")
+                stateDescription = "Stream error — check URL and credentials"
+            case .ended:
+                snapshotTimer?.invalidate()
+                snapshotTimer = nil
+                AppLog.debug(.camera, "Player ended. Snapshot timer invalidated.")
+                stateDescription = "Stream ended"
             default:          return
             }
             logger.debug("rtsp: \(stateDescription, privacy: .public)")
-            print("[rtsp] Player state: \(stateDescription)")
+            AppLog.debug(.camera, "Player state changed: \(stateDescription)")
             DispatchQueue.main.async { self.statusMessage = stateDescription }
+        }
+
+        @objc func mediaPlayerSnapshot(_ aNotification: Notification) {
+            guard isActive else { return }
+            guard aNotification.object as? VLCMediaPlayer != nil else {
+                AppLog.warning(.camera, "mediaPlayerSnapshot called without VLCMediaPlayer object")
+                return
+            }
+            let path = NSTemporaryDirectory() + "garage_snapshot.png"
+            AppLog.debug(.camera, "mediaPlayerSnapshot delegate called for path: \(path)")
+            if UIImage(contentsOfFile: path) != nil {
+                AppLog.info(.camera, "Snapshot file ready; invoking callback")
+                self.onSnapshot?(path)
+            } else {
+                AppLog.warning(.camera, "Snapshot file not found at path: \(path)")
+            }
+        }
+
+        private func describe(state: VLCMediaPlayerState) -> String {
+            switch state {
+            case .opening: return "opening"
+            case .buffering: return "buffering"
+            case .playing: return "playing"
+            case .paused: return "paused"
+            case .stopped: return "stopped"
+            case .error: return "error"
+            case .ended: return "ended"
+            case .esAdded: return "esAdded"
+            default: return "unknown(\(state.rawValue))"
+            }
         }
     }
 }

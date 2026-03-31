@@ -6,9 +6,24 @@ struct SettingsView: View {
     @StateObject private var hueManager = HueManager.shared
     @StateObject private var zaptecManager = ZaptecManager.shared
     @StateObject private var telegramManager = TelegramManager.shared
+
+    @AppStorage("cameraUrl") private var cameraUrl: String = ""
+    @AppStorage("cameraUsername") private var cameraUsername: String = ""
+    @AppStorage("cameraPassword") private var cameraPassword: String = ""
+    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
+    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+    @AppStorage("garageDoorDetectionEnabled") private var detectionEnabled: Bool = false
+    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
+    @AppStorage("garageDoorConfidenceThreshold") private var confidenceThreshold: Double = 0.75
+    @AppStorage("log.enabled.camera") private var logCamera: Bool = true
+    @AppStorage("log.enabled.tibber") private var logTibber: Bool = false
+    @AppStorage("log.enabled.zaptec") private var logZaptec: Bool = false
+    @AppStorage("log.enabled.hue") private var logHue: Bool = false
+    @AppStorage("log.enabled.telegram") private var logTelegram: Bool = false
     
     @State private var isApiKeyVisible: Bool = false
     @State private var isHomeIdVisible: Bool = false
+    @State private var isCameraPasswordVisible: Bool = false
     @State private var isZaptecPasswordVisible: Bool = false
     @State private var isTelegramTokenVisible: Bool = false
     @State private var showAddTelegramRecipient: Bool = false
@@ -17,6 +32,52 @@ struct SettingsView: View {
     @State private var showTelegramTestResult: Bool = false
     @State private var telegramTestResultTitle: String = ""
     @State private var telegramTestResultMessage: String = ""
+    @State private var originalSnapshot: SettingsSnapshot?
+
+    private struct SettingsSnapshot: Equatable {
+        var apiKey: String
+        var homeId: String
+        var criticalThreshold: Double
+        var breachCount: Int
+        var idleTimerMinutes: Double
+        var showMonthlyTop3Usage: Bool
+        var showWebsocketTop3Usage: Bool
+
+        var cameraUrl: String
+        var cameraUsername: String
+        var cameraPassword: String
+        var cameraNetworkCachingMs: Int
+        var cameraLiveCachingMs: Int
+
+        var detectionEnabled: Bool
+        var detectionInterval: Int
+        var confidenceThreshold: Double
+
+        var logCamera: Bool
+        var logTibber: Bool
+        var logZaptec: Bool
+        var logHue: Bool
+        var logTelegram: Bool
+
+        var zaptecUsername: String
+        var zaptecPassword: String
+        var zaptecInstallationId: String
+        var zaptecMaxConfiguredCurrent: Double
+        var zaptecActiveChargerId: String
+
+        var hueEnabled: Bool
+        var hueBridgeIP: String
+        var hueUsername: String
+
+        var telegramEnabled: Bool
+        var telegramBotToken: String
+        var telegramRecipientsData: Data?
+    }
+
+    private var hasUnsavedChanges: Bool {
+        guard let originalSnapshot else { return false }
+        return currentSnapshot() != originalSnapshot
+    }
     
     var body: some View {
         NavigationView {
@@ -171,11 +232,6 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Garage Camera (Optional)"), footer: Text("Provide RTSP URL and credentials to take a snapshot every 5 minutes.")) {
-                    @AppStorage("cameraUrl") var cameraUrl: String = ""
-                    @AppStorage("cameraUsername") var cameraUsername: String = ""
-                    @AppStorage("cameraPassword") var cameraPassword: String = ""
-                    @State var isCameraPasswordVisible: Bool = false
-                    
                     TextField("RTSP URL (rtsp://ip:port/stream)", text: $cameraUrl)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
@@ -201,8 +257,66 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+
+                    Stepper(
+                        "Network Buffer: \(cameraNetworkCachingMs) ms",
+                        value: $cameraNetworkCachingMs,
+                        in: 250...3000,
+                        step: 250
+                    )
+
+                    Stepper(
+                        "Live Buffer: \(cameraLiveCachingMs) ms",
+                        value: $cameraLiveCachingMs,
+                        in: 250...3000,
+                        step: 250
+                    )
+
+                    Button("Use Stable Stream Defaults") {
+                        cameraNetworkCachingMs = 1000
+                        cameraLiveCachingMs = 1000
+                    }
                 }
                 
+                Section(
+                    header: Text("Garage Door Detection (Optional)"),
+                    footer: Text("Analyzes snapshots from the live camera card in the monitor view.")
+                ) {
+                    Toggle("Enable Detection", isOn: $detectionEnabled)
+                    Stepper(
+                        "Check every \(detectionInterval) s",
+                        value: $detectionInterval,
+                        in: 1...30,
+                        step: 1
+                    )
+                    .disabled(!detectionEnabled)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Confidence threshold: \(Int(confidenceThreshold * 100))%")
+                        Slider(value: $confidenceThreshold, in: 0.5...1.0, step: 0.05)
+                    }
+                    .disabled(!detectionEnabled)
+                }
+
+                Section(
+                    header: Text("Diagnostics Logging"),
+                    footer: Text("Enable only the subsystems you want to inspect. Camera logs are useful for snapshot/detection troubleshooting.")
+                ) {
+                    Toggle("Camera", isOn: $logCamera)
+                    Toggle("Tibber", isOn: $logTibber)
+                    Toggle("Zaptec", isOn: $logZaptec)
+                    Toggle("Hue", isOn: $logHue)
+                    Toggle("Telegram", isOn: $logTelegram)
+
+                    Button("Focus Camera Logging") {
+                        logCamera = true
+                        logTibber = false
+                        logZaptec = false
+                        logHue = false
+                        logTelegram = false
+                    }
+                }
+
                 Section(header: Text("Zaptec Charger (Optional)"), footer: Text("Provide credentials to display basic charger state on the dashboard.")) {
                     TextField("Email", text: $zaptecManager.username)
                         .autocapitalization(.none)
@@ -429,7 +543,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(hasUnsavedChanges)
             .onAppear {
+                originalSnapshot = currentSnapshot()
                 if store.showMonthlyTop3Usage {
                     store.refreshTopUsage()
                 }
@@ -442,12 +558,104 @@ struct SettingsView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if hasUnsavedChanges {
+                        Button("Cancel") {
+                            if let originalSnapshot {
+                                restore(snapshot: originalSnapshot)
+                            }
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(hasUnsavedChanges ? "Save" : "Done") {
+                        originalSnapshot = currentSnapshot()
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
+        }
+    }
+
+    private func currentSnapshot() -> SettingsSnapshot {
+        SettingsSnapshot(
+            apiKey: store.apiKey,
+            homeId: store.homeId,
+            criticalThreshold: store.criticalThreshold,
+            breachCount: store.breachCount,
+            idleTimerMinutes: store.idleTimerMinutes,
+            showMonthlyTop3Usage: store.showMonthlyTop3Usage,
+            showWebsocketTop3Usage: store.showWebsocketTop3Usage,
+            cameraUrl: cameraUrl,
+            cameraUsername: cameraUsername,
+            cameraPassword: cameraPassword,
+            cameraNetworkCachingMs: cameraNetworkCachingMs,
+            cameraLiveCachingMs: cameraLiveCachingMs,
+            detectionEnabled: detectionEnabled,
+            detectionInterval: detectionInterval,
+            confidenceThreshold: confidenceThreshold,
+            logCamera: logCamera,
+            logTibber: logTibber,
+            logZaptec: logZaptec,
+            logHue: logHue,
+            logTelegram: logTelegram,
+            zaptecUsername: zaptecManager.username,
+            zaptecPassword: zaptecManager.password,
+            zaptecInstallationId: zaptecManager.installationId,
+            zaptecMaxConfiguredCurrent: zaptecManager.maxConfiguredCurrent,
+            zaptecActiveChargerId: zaptecManager.activeChargerId,
+            hueEnabled: hueManager.isEnabled,
+            hueBridgeIP: hueManager.bridgeIP,
+            hueUsername: hueManager.username,
+            telegramEnabled: telegramManager.isEnabled,
+            telegramBotToken: telegramManager.botToken,
+            telegramRecipientsData: try? JSONEncoder().encode(telegramManager.chatRecipients)
+        )
+    }
+
+    private func restore(snapshot: SettingsSnapshot) {
+        store.apiKey = snapshot.apiKey
+        store.homeId = snapshot.homeId
+        store.criticalThreshold = snapshot.criticalThreshold
+        store.breachCount = snapshot.breachCount
+        store.idleTimerMinutes = snapshot.idleTimerMinutes
+        store.showMonthlyTop3Usage = snapshot.showMonthlyTop3Usage
+        store.showWebsocketTop3Usage = snapshot.showWebsocketTop3Usage
+
+        cameraUrl = snapshot.cameraUrl
+        cameraUsername = snapshot.cameraUsername
+        cameraPassword = snapshot.cameraPassword
+        cameraNetworkCachingMs = snapshot.cameraNetworkCachingMs
+        cameraLiveCachingMs = snapshot.cameraLiveCachingMs
+
+        detectionEnabled = snapshot.detectionEnabled
+        detectionInterval = snapshot.detectionInterval
+        confidenceThreshold = snapshot.confidenceThreshold
+
+        logCamera = snapshot.logCamera
+        logTibber = snapshot.logTibber
+        logZaptec = snapshot.logZaptec
+        logHue = snapshot.logHue
+        logTelegram = snapshot.logTelegram
+
+        zaptecManager.username = snapshot.zaptecUsername
+        zaptecManager.password = snapshot.zaptecPassword
+        zaptecManager.installationId = snapshot.zaptecInstallationId
+        zaptecManager.maxConfiguredCurrent = snapshot.zaptecMaxConfiguredCurrent
+        zaptecManager.activeChargerId = snapshot.zaptecActiveChargerId
+
+        hueManager.isEnabled = snapshot.hueEnabled
+        hueManager.bridgeIP = snapshot.hueBridgeIP
+        hueManager.username = snapshot.hueUsername
+
+        telegramManager.isEnabled = snapshot.telegramEnabled
+        telegramManager.botToken = snapshot.telegramBotToken
+        if let data = snapshot.telegramRecipientsData,
+           let recipients = try? JSONDecoder().decode([TelegramManager.TelegramChatRecipient].self, from: data) {
+            telegramManager.chatRecipients = recipients
+        } else {
+            telegramManager.chatRecipients = []
         }
     }
 }
