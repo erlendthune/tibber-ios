@@ -372,8 +372,7 @@ struct MonitorView: View {
                     GarageDoorCameraCard(
                         cameraUrl: cameraUrl,
                         cameraUsername: cameraUsername,
-                        cameraPassword: cameraPassword,
-                        detector: garageDoorDetector
+                        cameraPassword: cameraPassword
                     )
                     .padding()
                 }
@@ -408,6 +407,7 @@ struct MonitorView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .environmentObject(garageDoorDetector)
     }
 }
 
@@ -415,7 +415,7 @@ struct GarageDoorCameraCard: View {
     let cameraUrl: String
     let cameraUsername: String
     let cameraPassword: String
-    @ObservedObject var detector: GarageDoorDetector
+    @EnvironmentObject var detector: GarageDoorDetector
     @State private var statusMessage: String? = "Connecting..."
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
     @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
