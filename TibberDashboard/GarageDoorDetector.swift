@@ -80,7 +80,10 @@ class GarageDoorDetector: ObservableObject {
             guard let self else { return }
             if let error {
                 self.logger.error("GarageDoorDetector: request error — \(error.localizedDescription, privacy: .public)")
-                AppLog.error(.camera, "Vision request error: \(error.localizedDescription)")
+                // Log errors off main thread to avoid contention
+                DispatchQueue.global(qos: .utility).async {
+                    AppLog.error(.camera, "Vision request error: \(error.localizedDescription)")
+                }
                 return
             }
             guard let results = request.results as? [VNClassificationObservation],
@@ -89,7 +92,7 @@ class GarageDoorDetector: ObservableObject {
             let detectedConfidence = Double(top.confidence)
             guard detectedConfidence >= self.confidenceThreshold else {
                 self.logger.debug("GarageDoorDetector: low confidence \(detectedConfidence, format: .fixed(precision: 2), privacy: .public) for '\(top.identifier, privacy: .public)' — skipping")
-                AppLog.debug(.camera, "Low confidence result ignored. label=\(top.identifier) confidence=\(detectedConfidence) threshold=\(self.confidenceThreshold)")
+                // Skip app logging for low-confidence results to reduce main thread pressure
                 return
             }
 
@@ -101,9 +104,20 @@ class GarageDoorDetector: ObservableObject {
             }
 
             self.logger.debug("GarageDoorDetector: \(newState.rawValue, privacy: .public) @ \(detectedConfidence, format: .fixed(precision: 2), privacy: .public)")
-            AppLog.info(.camera, "Detection accepted. label=\(top.identifier) mappedState=\(newState.rawValue) confidence=\(detectedConfidence)")
+            // Log detection on background queue to avoid main thread priority inversion
+            DispatchQueue.global(qos: .utility).async {
+                AppLog.info(.camera, "Detection accepted. label=\(top.identifier) mappedState=\(newState.rawValue) confidence=\(detectedConfidence)")
+            }
 
+            // Only publish updates if state actually changed to reduce onChange firing
             DispatchQueue.main.async {
+                guard newState != self.doorState else {
+                    // State unchanged, skip logging and alert handling
+                    self.confidence = detectedConfidence
+                    return
+                }
+                
+                AppLog.debug(.camera, "Publishing detector update on main thread. oldState=\(self.doorState.rawValue) newState=\(newState.rawValue) oldConfidence=\(self.confidence) newConfidence=\(detectedConfidence) hadSnapshot=\(self.lastSnapshot != nil)")
                 self.confidence = detectedConfidence
                 self.doorState = newState
                 self.handleAlertStateTransition(newState)

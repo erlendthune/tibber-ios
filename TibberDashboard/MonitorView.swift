@@ -408,6 +408,12 @@ struct MonitorView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
         .environmentObject(garageDoorDetector)
+        .onAppear {
+            AppLog.info(.camera, "Stats TabView appeared. currentPage=\(cardPageIndex)")
+        }
+        .onChange(of: cardPageIndex) { newPage in
+            AppLog.info(.camera, "Stats TabView page changed to index=\(newPage)")
+        }
     }
 }
 
@@ -417,11 +423,42 @@ struct GarageDoorCameraCard: View {
     let cameraPassword: String
     @EnvironmentObject var detector: GarageDoorDetector
     @State private var statusMessage: String? = "Connecting..."
+    @State private var lastObservedState: DoorState = .unknown
+    @State private var lastObservedConfidence: Double = 0.0
+    @State private var lastObservedSnapshotDate: Date? = nil
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
     @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
     @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
 
+    private var headerStateText: String? {
+        if detector.doorState != .unknown {
+            return detector.doorState == .open ? "OPEN" : "CLOSED"
+        }
+        if detector.isEnabled {
+            return "DETECTING"
+        }
+        return nil
+    }
+
+    private var detailStateText: String {
+        detector.doorState == .unknown ? "State: Unknown" : "State: \(detector.doorState == .open ? "Open" : "Closed")"
+    }
+
+    private func debugRenderState() {
+        // Reduce logging frequency: only log on state changes, not every render
+        // This significantly reduces main thread contention during frequent VLC state updates
+        #if DEBUG
+        if detector.doorState != lastObservedState {
+            AppLog.debug(
+                .camera,
+                "GarageDoorCameraCard body render. doorState=\(detector.doorState.rawValue) header=\(headerStateText ?? "nil") detail=\(detailStateText) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil) status=\(statusMessage ?? "nil")"
+            )
+        }
+        #endif
+    }
+
     var body: some View {
+        let _ = debugRenderState()
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "door.garage.closed")
@@ -431,16 +468,11 @@ struct GarageDoorCameraCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                if detector.doorState != .unknown {
-                    Text(detector.doorState == .open ? "OPEN" : "CLOSED")
+                if let headerStateText {
+                    Text(headerStateText)
                         .font(.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(detector.doorState == .open ? .orange : .green)
-                } else if detector.isEnabled {
-                    Text("DETECTING")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(detector.doorState == .unknown ? .secondary : (detector.doorState == .open ? .orange : .green))
                 }
             }
 
@@ -479,7 +511,7 @@ struct GarageDoorCameraCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(detector.doorState == .unknown ? "State: Unknown" : "State: \(detector.doorState == .open ? "Open" : "Closed")")
+                        Text(detailStateText)
                             .font(.subheadline)
                             .foregroundColor(.primary)
                         Text("Confidence: \(Int(detector.confidence * 100))%")
@@ -507,6 +539,42 @@ struct GarageDoorCameraCard: View {
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+        .onAppear {
+            AppLog.info(.camera, "GarageDoorCameraCard appeared. state=\(detector.doorState.rawValue) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil) updated=\(detector.lastSnapshotDate?.formatted(date: .omitted, time: .standard) ?? "nil")")
+        }
+        .onDisappear {
+            AppLog.info(.camera, "GarageDoorCameraCard disappeared. state=\(detector.doorState.rawValue) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil)")
+        }
+        .onChange(of: detector.doorState) { newState in
+            // Only log at debug level when state changes to reduce main thread contention
+            guard newState != lastObservedState else { return }
+            lastObservedState = newState
+            DispatchQueue.main.async {
+                AppLog.info(.camera, "GarageDoorCameraCard observed doorState change -> \(newState.rawValue)")
+            }
+        }
+        .onChange(of: detector.confidence) { newConfidence in
+            // Log confidence changes with higher threshold to reduce frequency
+            let delta = abs(newConfidence - lastObservedConfidence)
+            guard delta >= 0.01 else { return }  // Only log if confidence changed by at least 1%
+            lastObservedConfidence = newConfidence
+            // Skip detailed logging to reduce main thread pressure
+        }
+        .onChange(of: detector.lastSnapshotDate) { newDate in
+            guard newDate != lastObservedSnapshotDate else { return }
+            lastObservedSnapshotDate = newDate
+            DispatchQueue.main.async {
+                AppLog.info(.camera, "GarageDoorCameraCard observed snapshot date change -> \(newDate?.formatted(date: .omitted, time: .standard) ?? "nil")")
+            }
+        }
+        .onChange(of: statusMessage) { newMessage in
+            // Only log significant status changes (connecting, playing, error)
+            if let msg = newMessage {
+                if msg.contains("Connecting") || msg.contains("Error") || msg.contains("playing") {
+                    AppLog.debug(.camera, "GarageDoorCameraCard status message changed -> \(msg)")
+                }
+            }
+        }
     }
 
     private func constructRtspUrl() -> String {
