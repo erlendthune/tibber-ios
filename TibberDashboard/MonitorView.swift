@@ -368,47 +368,46 @@ struct MonitorView: View {
         TabView(selection: $cardPageIndex) {
             // Camera Card
             if !showingCamera && !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
-                VStack(spacing: 16) {
+                ScrollView {
                     GarageDoorCameraCard(
                         cameraUrl: cameraUrl,
                         cameraUsername: cameraUsername,
                         cameraPassword: cameraPassword,
                         detector: garageDoorDetector
                     )
-                    Spacer()
+                    .padding()
                 }
                 .tag(0)
             }
 
             // Tibber API Top 3 Card
             if store.showMonthlyTop3Usage {
-                VStack(spacing: 16) {
+                ScrollView {
                     TopThreeUsageCard(store: store)
-                    Spacer()
+                        .padding()
                 }
                 .tag(1)
             }
 
             // WebSocket Top 3 Card
             if store.showWebsocketTop3Usage {
-                VStack(spacing: 16) {
+                ScrollView {
                     WebSocketTopThreeUsageCard(store: store)
-                    Spacer()
+                        .padding()
                 }
                 .tag(2)
             }
 
             // Zaptec Charger Card
             if ZaptecManager.shared.isAuthenticated {
-                VStack(spacing: 16) {
+                ScrollView {
                     ZaptecControlView(manager: ZaptecManager.shared)
-                    Spacer()
+                        .padding()
                 }
                 .tag(3)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .frame(maxHeight: .infinity)
     }
 }
 
