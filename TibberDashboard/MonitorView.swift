@@ -103,6 +103,7 @@ struct MonitorView: View {
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
+    @State private var cardPageIndex = 0
     
     // Camera settings from AppStorage
     @AppStorage("cameraUrl") private var cameraUrl: String = ""
@@ -364,29 +365,50 @@ struct MonitorView: View {
     
     @ViewBuilder
     private func statsAndLog(for data: LiveMeasurement) -> some View {
-        VStack(spacing: 16) {
+        TabView(selection: $cardPageIndex) {
+            // Camera Card
             if !showingCamera && !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
-                GarageDoorCameraCard(
-                    cameraUrl: cameraUrl,
-                    cameraUsername: cameraUsername,
-                    cameraPassword: cameraPassword,
-                    detector: garageDoorDetector
-                )
+                VStack(spacing: 16) {
+                    GarageDoorCameraCard(
+                        cameraUrl: cameraUrl,
+                        cameraUsername: cameraUsername,
+                        cameraPassword: cameraPassword,
+                        detector: garageDoorDetector
+                    )
+                    Spacer()
+                }
+                .tag(0)
             }
 
+            // Tibber API Top 3 Card
             if store.showMonthlyTop3Usage {
-                TopThreeUsageCard(store: store)
+                VStack(spacing: 16) {
+                    TopThreeUsageCard(store: store)
+                    Spacer()
+                }
+                .tag(1)
             }
 
+            // WebSocket Top 3 Card
             if store.showWebsocketTop3Usage {
-                WebSocketTopThreeUsageCard(store: store)
+                VStack(spacing: 16) {
+                    WebSocketTopThreeUsageCard(store: store)
+                    Spacer()
+                }
+                .tag(2)
             }
 
-            // Zaptec Charger Info (Optional)
+            // Zaptec Charger Card
             if ZaptecManager.shared.isAuthenticated {
-                ZaptecControlView(manager: ZaptecManager.shared)
+                VStack(spacing: 16) {
+                    ZaptecControlView(manager: ZaptecManager.shared)
+                    Spacer()
+                }
+                .tag(3)
             }
         }
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .frame(maxHeight: .infinity)
     }
 }
 
