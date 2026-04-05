@@ -1,0 +1,12 @@
+Pods/
+DerivedData/
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+
+# Keep workspace and project files tracked, but ignore user data within
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
