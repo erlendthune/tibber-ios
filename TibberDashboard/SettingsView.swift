@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage("garageDoorDetectionEnabled") private var detectionEnabled: Bool = false
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
     @AppStorage("garageDoorConfidenceThreshold") private var confidenceThreshold: Double = 0.75
+    @AppStorage("garageDoorAlertRepeatMinutes") private var alertRepeatMinutes: Int = 5
     @AppStorage("log.enabled.camera") private var logCamera: Bool = true
     @AppStorage("log.enabled.tibber") private var logTibber: Bool = false
     @AppStorage("log.enabled.zaptec") private var logZaptec: Bool = false
@@ -52,6 +53,7 @@ struct SettingsView: View {
         var detectionEnabled: Bool
         var detectionInterval: Int
         var confidenceThreshold: Double
+        var alertRepeatMinutes: Int
 
         var logCamera: Bool
         var logTibber: Bool
@@ -280,7 +282,7 @@ struct SettingsView: View {
                 
                 Section(
                     header: Text("Garage Door Detection (Optional)"),
-                    footer: Text("Analyzes snapshots from the live camera card in the monitor view.")
+                    footer: Text("Analyzes snapshots from the live camera card in the monitor view. When the door stays open, alerts repeat at the configured interval.")
                 ) {
                     Toggle("Enable Detection", isOn: $detectionEnabled)
                     Stepper(
@@ -295,6 +297,14 @@ struct SettingsView: View {
                         Text("Confidence threshold: \(Int(confidenceThreshold * 100))%")
                         Slider(value: $confidenceThreshold, in: 0.5...1.0, step: 0.05)
                     }
+                    .disabled(!detectionEnabled)
+
+                    Stepper(
+                        "Repeat open alert every \(alertRepeatMinutes) min",
+                        value: $alertRepeatMinutes,
+                        in: 1...120,
+                        step: 1
+                    )
                     .disabled(!detectionEnabled)
                 }
 
@@ -595,6 +605,7 @@ struct SettingsView: View {
             detectionEnabled: detectionEnabled,
             detectionInterval: detectionInterval,
             confidenceThreshold: confidenceThreshold,
+            alertRepeatMinutes: alertRepeatMinutes,
             logCamera: logCamera,
             logTibber: logTibber,
             logZaptec: logZaptec,
@@ -632,6 +643,7 @@ struct SettingsView: View {
         detectionEnabled = snapshot.detectionEnabled
         detectionInterval = snapshot.detectionInterval
         confidenceThreshold = snapshot.confidenceThreshold
+        alertRepeatMinutes = snapshot.alertRepeatMinutes
 
         logCamera = snapshot.logCamera
         logTibber = snapshot.logTibber

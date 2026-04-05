@@ -59,23 +59,18 @@ class TelegramManager: ObservableObject {
 
     // MARK: - Garage Door Alerts
 
-    private var lastGarageDoorAlertTime: Date = .distantPast
-    private var lastAlertedDoorState: Bool? = nil
-    private let garageDoorAlertCooldown: TimeInterval = 5 * 60 // 5 minutes
-
-    func notifyGarageDoor(isOpen: Bool) {
+    func notifyGarageDoor(isOpen: Bool, isReminder: Bool = false) {
         guard isEnabled, !botToken.isEmpty else { return }
 
-        let now = Date()
-        // Always send on state change; apply cooldown only for repeated same-state alerts
-        if lastAlertedDoorState == isOpen {
-            guard now.timeIntervalSince(lastGarageDoorAlertTime) >= garageDoorAlertCooldown else { return }
+        let text: String
+        let alertDescription: String
+        if isOpen {
+            text = isReminder ? "🚗 *Garage door is still OPEN*" : "🚗 *Garage door is now OPEN*"
+            alertDescription = isReminder ? "OPEN reminder" : "OPEN"
+        } else {
+            text = "🚗 *Garage door is now CLOSED*"
+            alertDescription = "CLOSED"
         }
-        lastGarageDoorAlertTime = now
-        lastAlertedDoorState = isOpen
-
-        let stateText = isOpen ? "OPEN" : "CLOSED"
-        let text = "🚗 *Garage door is now \(stateText)*"
 
         for recipient in chatRecipients {
             guard !recipient.chatId.isEmpty else { continue }
@@ -88,7 +83,7 @@ class TelegramManager: ObservableObject {
                 if let error = error {
                     print("Garage door Telegram alert failed for \(recipient.name): \(error.localizedDescription)")
                 } else {
-                    print("Garage door alert (\(stateText)) sent to \(recipient.name)!")
+                    print("Garage door alert (\(alertDescription)) sent to \(recipient.name)!")
                 }
             }.resume()
         }

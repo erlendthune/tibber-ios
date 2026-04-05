@@ -18,10 +18,12 @@ class GarageDoorDetector: ObservableObject {
 
     @AppStorage("garageDoorDetectionEnabled") var isEnabled: Bool = false
     @AppStorage("garageDoorConfidenceThreshold") var confidenceThreshold: Double = 0.75
+    @AppStorage("garageDoorAlertRepeatMinutes") var alertRepeatMinutes: Int = 5
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "TibberDashboard", category: "GarageDoorDetector")
     private var vnModel: VNCoreMLModel?
     private var lastKnownState: DoorState = .unknown
+    private var lastOpenAlertTime: Date = .distantPast
 
     private func deleteSnapshotIfTemporary(_ imagePath: String) {
         let tempDir = NSTemporaryDirectory()
@@ -104,12 +106,7 @@ class GarageDoorDetector: ObservableObject {
             DispatchQueue.main.async {
                 self.confidence = detectedConfidence
                 self.doorState = newState
-
-                if newState != .unknown && newState != self.lastKnownState {
-                    self.lastKnownState = newState
-                    AppLog.info(.camera, "Door state changed to \(newState.rawValue). Triggering Telegram alert.")
-                    TelegramManager.shared.notifyGarageDoor(isOpen: newState == .open)
-                }
+                self.handleAlertStateTransition(newState)
             }
         }
         request.imageCropAndScaleOption = .centerCrop
@@ -122,6 +119,39 @@ class GarageDoorDetector: ObservableObject {
                 self.logger.error("GarageDoorDetector: handler error — \(error.localizedDescription, privacy: .public)")
                 AppLog.error(.camera, "Vision handler error: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func handleAlertStateTransition(_ newState: DoorState) {
+        switch newState {
+        case .open:
+            if lastKnownState != .open {
+                lastKnownState = .open
+                lastOpenAlertTime = Date()
+                AppLog.info(.camera, "Door state changed to open. Triggering Telegram alert.")
+                TelegramManager.shared.notifyGarageDoor(isOpen: true)
+                return
+            }
+
+            let repeatInterval = TimeInterval(max(1, alertRepeatMinutes) * 60)
+            guard Date().timeIntervalSince(lastOpenAlertTime) >= repeatInterval else { return }
+
+            lastOpenAlertTime = Date()
+            AppLog.info(.camera, "Door still open. Triggering repeated Telegram alert after \(alertRepeatMinutes) minute(s).")
+            TelegramManager.shared.notifyGarageDoor(isOpen: true, isReminder: true)
+
+        case .closed:
+            let didChange = lastKnownState != .closed
+            lastKnownState = .closed
+            lastOpenAlertTime = .distantPast
+
+            if didChange {
+                AppLog.info(.camera, "Door state changed to closed. Triggering Telegram alert.")
+                TelegramManager.shared.notifyGarageDoor(isOpen: false)
+            }
+
+        case .unknown:
+            break
         }
     }
 }
