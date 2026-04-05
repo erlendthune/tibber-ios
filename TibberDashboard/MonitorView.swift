@@ -367,7 +367,7 @@ struct MonitorView: View {
     private func statsAndLog(for data: LiveMeasurement) -> some View {
         TabView(selection: $cardPageIndex) {
             // Camera Card
-            if !showingCamera && !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
+            if !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
                 ScrollView {
                     GarageDoorCameraCard(
                         cameraUrl: cameraUrl,
