@@ -407,7 +407,6 @@ struct MonitorView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .environmentObject(garageDoorDetector)
         .onAppear {
             AppLog.info(.camera, "Stats TabView appeared. currentPage=\(cardPageIndex)")
         }
@@ -421,7 +420,7 @@ struct GarageDoorCameraCard: View {
     let cameraUrl: String
     let cameraUsername: String
     let cameraPassword: String
-    @EnvironmentObject var detector: GarageDoorDetector
+    @StateObject private var detector = GarageDoorDetector.shared
     @State private var statusMessage: String? = "Connecting..."
     @State private var lastObservedState: GarageDoorDetector.DoorState = .unknown
     @State private var lastObservedConfidence: Double = 0.0
