@@ -423,7 +423,7 @@ struct GarageDoorCameraCard: View {
     let cameraPassword: String
     @EnvironmentObject var detector: GarageDoorDetector
     @State private var statusMessage: String? = "Connecting..."
-    @State private var lastObservedState: DoorState = .unknown
+    @State private var lastObservedState: GarageDoorDetector.DoorState = .unknown
     @State private var lastObservedConfidence: Double = 0.0
     @State private var lastObservedSnapshotDate: Date? = nil
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
