@@ -144,20 +144,23 @@ struct CameraView: UIViewRepresentable {
             pathMonitor = nil
             connectRetries = 0
 
-            // Stop playback immediately on main thread to halt render thread
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.mediaPlayer?.stop()
+            // Capture the player reference NOW so that async blocks below only
+            // ever touch this specific player instance. If start() is called
+            // immediately after stop(), it will create a new player and set
+            // self.mediaPlayer to that new instance — the closures must not
+            // accidentally clear the new player.
+            let playerToStop = mediaPlayer
+            mediaPlayer = nil
+
+            DispatchQueue.main.async {
+                playerToStop?.stop()
             }
-            
-            // Detach drawable and delegate to reduce off-main-thread layer mutations.
-            // Do this after a brief delay to let the stop() propagate.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self = self else { return }
-                self.mediaPlayer?.delegate = nil
-                self.mediaPlayer?.drawable = nil
-                self.mediaPlayer = nil
-                self.drawableView = nil
+
+            // Detach drawable and delegate after a brief delay to let stop() propagate.
+            // Only touches the captured player, never self.mediaPlayer.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                playerToStop?.delegate = nil
+                playerToStop?.drawable = nil
             }
 
             AppLog.debug(.camera, "CameraView.stop completed")
