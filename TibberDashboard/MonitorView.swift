@@ -94,6 +94,14 @@ struct HelpView: View {
 }
 
 struct MonitorView: View {
+    private enum MonitorCardKind: String {
+        case garageStatus
+        case garageLiveFeed
+        case tibberTop3
+        case websocketTop3
+        case zaptec
+    }
+
     @ObservedObject var store: TibberMonitorStore
     @ObservedObject private var garageDoorDetector = GarageDoorDetector.shared
     @State private var showingSettings = false
@@ -103,7 +111,7 @@ struct MonitorView: View {
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
-    @State private var cardPageIndex = 0
+    @State private var selectedCard: MonitorCardKind = .garageStatus
     
     // Camera settings from AppStorage
     @AppStorage("cameraUrl") private var cameraUrl: String = ""
@@ -114,6 +122,42 @@ struct MonitorView: View {
     init(store: TibberMonitorStore) {
         self.store = store
         ZaptecManager.shared.monitorStore = store
+    }
+
+    private var hasCameraCredentials: Bool {
+        !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty
+    }
+
+    private var availableCardKinds: [MonitorCardKind] {
+        var cards: [MonitorCardKind] = []
+        if hasCameraCredentials {
+            cards.append(.garageStatus)
+            cards.append(.garageLiveFeed)
+        }
+        if store.showMonthlyTop3Usage {
+            cards.append(.tibberTop3)
+        }
+        if store.showWebsocketTop3Usage {
+            cards.append(.websocketTop3)
+        }
+        if ZaptecManager.shared.isAuthenticated {
+            cards.append(.zaptec)
+        }
+        return cards
+    }
+
+    private var isLiveFeedPageSelected: Bool {
+        selectedCard == .garageLiveFeed
+    }
+
+    private func normalizeCardSelection() {
+        guard let first = availableCardKinds.first else {
+            selectedCard = .garageStatus
+            return
+        }
+        if !availableCardKinds.contains(selectedCard) {
+            selectedCard = first
+        }
     }
     
     var body: some View {
@@ -257,6 +301,20 @@ struct MonitorView: View {
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.5), value: store.isScreensaverActive)
             }
+
+            // Keep detector running even when user is not on the live-feed page.
+            // Disable worker while live feed/sheet is visible to avoid dual RTSP sessions.
+            if hasCameraCredentials && !isLiveFeedPageSelected && !showingCamera {
+                GarageDoorDetectionWorker(
+                    cameraUrl: cameraUrl,
+                    cameraUsername: cameraUsername,
+                    cameraPassword: cameraPassword
+                )
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         }
         .statusBarHidden(true) // Hides the top status bar (battery, time, etc.) for a cleaner look
         .sheet(isPresented: $showingSettings) {
@@ -283,12 +341,25 @@ struct MonitorView: View {
             ZaptecManager.shared.stopPolling()
         }
         .onAppear {
+            normalizeCardSelection()
             if ZaptecManager.shared.token == nil && !ZaptecManager.shared.username.isEmpty {
                 ZaptecManager.shared.authenticate()
             }
             if store.showMonthlyTop3Usage {
                 store.refreshTopUsage()
             }
+        }
+        .onChange(of: hasCameraCredentials) { _ in
+            normalizeCardSelection()
+        }
+        .onChange(of: store.showMonthlyTop3Usage) { _ in
+            normalizeCardSelection()
+        }
+        .onChange(of: store.showWebsocketTop3Usage) { _ in
+            normalizeCardSelection()
+        }
+        .onChange(of: ZaptecManager.shared.isAuthenticated) { _ in
+            normalizeCardSelection()
         }
     }
     
@@ -363,71 +434,82 @@ struct MonitorView: View {
         .padding(20)
     }
     
-    @ViewBuilder
+    private var cardSetID: String {
+        availableCardKinds.map(\.rawValue).joined(separator: "_")
+    }
+
     private func statsAndLog(for data: LiveMeasurement) -> some View {
-        TabView(selection: $cardPageIndex) {
-            // Camera Card
-            if !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty {
-                ScrollView {
-                    GarageDoorCameraCard(
-                        cameraUrl: cameraUrl,
-                        cameraUsername: cameraUsername,
-                        cameraPassword: cameraPassword
-                    )
-                    .padding()
+        // cardSetID forces a full TabView teardown/rebuild whenever the set of
+        // visible cards changes (settings toggles, auth changes etc.). This is
+        // intentional — it's the only reliable way to stop SwiftUI from showing
+        // stale/wrong page content in a dynamically-sized page TabView.
+        let setID = cardSetID
+        return VStack(spacing: 8) {
+            TabView(selection: $selectedCard) {
+                ForEach(availableCardKinds, id: \.self) { card in
+                    Group {
+                        switch card {
+                        case .garageStatus:
+                            GarageDoorStatusCard()
+                                .padding()
+                        case .garageLiveFeed:
+                            GarageDoorLiveFeedCard(
+                                cameraUrl: cameraUrl,
+                                cameraUsername: cameraUsername,
+                                cameraPassword: cameraPassword,
+                                isActive: isLiveFeedPageSelected
+                            )
+                            .padding()
+                        case .tibberTop3:
+                            ScrollView {
+                                TopThreeUsageCard(store: store)
+                                    .padding()
+                            }
+                        case .websocketTop3:
+                            ScrollView {
+                                WebSocketTopThreeUsageCard(store: store)
+                                    .padding()
+                            }
+                        case .zaptec:
+                            ScrollView {
+                                ZaptecControlView(manager: ZaptecManager.shared)
+                                    .padding()
+                            }
+                        }
+                    }
+                    .tag(card)
                 }
-                .tag(0)
+            }
+            .id(setID)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onAppear {
+                normalizeCardSelection()
+                AppLog.info(.camera, "Stats TabView appeared. currentPage=\(selectedCard.rawValue)")
+            }
+            .onChange(of: selectedCard) { newCard in
+                AppLog.info(.camera, "Stats TabView page changed to=\(newCard.rawValue)")
+            }
+            .onChange(of: availableCardKinds) { _ in
+                normalizeCardSelection()
             }
 
-            // Tibber API Top 3 Card
-            if store.showMonthlyTop3Usage {
-                ScrollView {
-                    TopThreeUsageCard(store: store)
-                        .padding()
+            if availableCardKinds.count > 1 {
+                HStack(spacing: 8) {
+                    ForEach(availableCardKinds, id: \.self) { card in
+                        Circle()
+                            .fill(card == selectedCard ? Color.primary : Color.secondary.opacity(0.35))
+                            .frame(width: 7, height: 7)
+                    }
                 }
-                .tag(1)
+                .padding(.top, 2)
             }
-
-            // WebSocket Top 3 Card
-            if store.showWebsocketTop3Usage {
-                ScrollView {
-                    WebSocketTopThreeUsageCard(store: store)
-                        .padding()
-                }
-                .tag(2)
-            }
-
-            // Zaptec Charger Card
-            if ZaptecManager.shared.isAuthenticated {
-                ScrollView {
-                    ZaptecControlView(manager: ZaptecManager.shared)
-                        .padding()
-                }
-                .tag(3)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .onAppear {
-            AppLog.info(.camera, "Stats TabView appeared. currentPage=\(cardPageIndex)")
-        }
-        .onChange(of: cardPageIndex) { newPage in
-            AppLog.info(.camera, "Stats TabView page changed to index=\(newPage)")
         }
     }
 }
 
-struct GarageDoorCameraCard: View {
-    let cameraUrl: String
-    let cameraUsername: String
-    let cameraPassword: String
-    @StateObject private var detector = GarageDoorDetector.shared
-    @State private var statusMessage: String? = "Connecting..."
-    @State private var lastObservedState: GarageDoorDetector.DoorState = .unknown
-    @State private var lastObservedConfidence: Double = 0.0
-    @State private var lastObservedSnapshotDate: Date? = nil
-    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
-    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
-    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+// MARK: - Garage Door Status Card (pure SwiftUI, no VLC)
+struct GarageDoorStatusCard: View {
+    @ObservedObject private var detector = GarageDoorDetector.shared
 
     private var headerStateText: String? {
         if detector.doorState != .unknown {
@@ -443,21 +525,7 @@ struct GarageDoorCameraCard: View {
         detector.doorState == .unknown ? "State: Unknown" : "State: \(detector.doorState == .open ? "Open" : "Closed")"
     }
 
-    private func debugRenderState() {
-        // Reduce logging frequency: only log on state changes, not every render
-        // This significantly reduces main thread contention during frequent VLC state updates
-        #if DEBUG
-        if detector.doorState != lastObservedState {
-            AppLog.debug(
-                .camera,
-                "GarageDoorCameraCard body render. doorState=\(detector.doorState.rawValue) header=\(headerStateText ?? "nil") detail=\(detailStateText) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil) status=\(statusMessage ?? "nil")"
-            )
-        }
-        #endif
-    }
-
     var body: some View {
-        let _ = debugRenderState()
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "door.garage.closed")
@@ -469,10 +537,81 @@ struct GarageDoorCameraCard: View {
                 Spacer()
                 if let headerStateText {
                     Text(headerStateText)
-                        .id("header_\(detector.doorState.rawValue)")
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(detector.doorState == .unknown ? .secondary : (detector.doorState == .open ? .orange : .green))
+                }
+            }
+
+            HStack(alignment: .center, spacing: 10) {
+                Group {
+                    if let image = detector.lastSnapshot {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color(.systemGray5)
+                            Image(systemName: "photo")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 84, height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(detailStateText)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    Text("Confidence: \(Int(detector.confidence * 100))%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if let date = detector.lastSnapshotDate {
+                        Text("Updated: \(date.formatted(date: .omitted, time: .standard))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Updated: --")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
+    }
+}
+
+// MARK: - Garage Door Live Feed Card (VLC stream + detection trigger)
+struct GarageDoorLiveFeedCard: View {
+    let cameraUrl: String
+    let cameraUsername: String
+    let cameraPassword: String
+    let isActive: Bool
+
+    @ObservedObject private var detector = GarageDoorDetector.shared
+    @State private var statusMessage: String? = "Connecting..."
+    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
+    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
+    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "video.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Garage Camera")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -481,6 +620,18 @@ struct GarageDoorCameraCard: View {
                 Text("Camera URL not configured")
                     .font(.caption)
                     .foregroundColor(.red)
+            } else if !isActive {
+                VStack(spacing: 8) {
+                    Image(systemName: "video.slash")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                    Text("Live feed paused on this page")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 220)
+                .background(Color(.systemGray5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
                 CameraView(
                     url: rtspUrl,
@@ -490,95 +641,53 @@ struct GarageDoorCameraCard: View {
                     networkCachingMs: cameraNetworkCachingMs,
                     liveCachingMs: cameraLiveCachingMs
                 )
-                .frame(height: 170)
+                .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                HStack(alignment: .center, spacing: 10) {
-                    Group {
-                        if let image = detector.lastSnapshot {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .id(detector.lastSnapshotDate?.timeIntervalSince1970 ?? 0)
-                        } else {
-                            ZStack {
-                                Color(.systemGray5)
-                                Image(systemName: "photo")
-                                    .foregroundColor(.secondary)
-                            }
-                            .id("no_snapshot")
-                        }
-                    }
-                    .frame(width: 84, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(detailStateText)
-                            .id("detail_\(detector.doorState.rawValue)")
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Text("Confidence: \(Int(detector.confidence * 100))%")
-                            .id("conf_\(detector.confidence)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        if let date = detector.lastSnapshotDate {
-                            Text("Updated: \(date.formatted(date: .omitted, time: .standard))")
-                                .id("date_\(date.timeIntervalSince1970)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Updated: --")
-                                .id("date_none")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    Spacer()
-                }
-            }
-
-            if let statusMessage {
-                Text(statusMessage)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 15).fill(Color(.systemGray6)))
-        .onAppear {
-            AppLog.info(.camera, "GarageDoorCameraCard appeared. state=\(detector.doorState.rawValue) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil) updated=\(detector.lastSnapshotDate?.formatted(date: .omitted, time: .standard) ?? "nil")")
+    }
+
+    private func constructRtspUrl() -> String {
+        guard !cameraUrl.isEmpty, !cameraUsername.isEmpty, !cameraPassword.isEmpty else {
+            return ""
         }
-        .onDisappear {
-            AppLog.info(.camera, "GarageDoorCameraCard disappeared. state=\(detector.doorState.rawValue) confidence=\(detector.confidence) hasSnapshot=\(detector.lastSnapshot != nil)")
+        var urlPart = cameraUrl
+        if let rangeOfScheme = urlPart.range(of: "rtsp://") {
+            urlPart.removeSubrange(urlPart.startIndex..<rangeOfScheme.upperBound)
         }
-        .onChange(of: detector.doorState) { newState in
-            // Only log at debug level when state changes to reduce main thread contention
-            guard newState != lastObservedState else { return }
-            lastObservedState = newState
-            DispatchQueue.main.async {
-                AppLog.info(.camera, "GarageDoorCameraCard observed doorState change -> \(newState.rawValue)")
-            }
+        if let atIndex = urlPart.firstIndex(of: "@") {
+            urlPart.removeSubrange(urlPart.startIndex...atIndex)
         }
-        .onChange(of: detector.confidence) { newConfidence in
-            // Log confidence changes with higher threshold to reduce frequency
-            let delta = abs(newConfidence - lastObservedConfidence)
-            guard delta >= 0.01 else { return }  // Only log if confidence changed by at least 1%
-            lastObservedConfidence = newConfidence
-            // Skip detailed logging to reduce main thread pressure
-        }
-        .onChange(of: detector.lastSnapshotDate) { newDate in
-            guard newDate != lastObservedSnapshotDate else { return }
-            lastObservedSnapshotDate = newDate
-            DispatchQueue.main.async {
-                AppLog.info(.camera, "GarageDoorCameraCard observed snapshot date change -> \(newDate?.formatted(date: .omitted, time: .standard) ?? "nil")")
-            }
-        }
-        .onChange(of: statusMessage) { newMessage in
-            // Only log significant status changes (connecting, playing, error)
-            if let msg = newMessage {
-                if msg.contains("Connecting") || msg.contains("Error") || msg.contains("playing") {
-                    AppLog.debug(.camera, "GarageDoorCameraCard status message changed -> \(msg)")
-                }
+        return "rtsp://\(cameraUsername):\(cameraPassword)@\(urlPart)"
+    }
+}
+
+// MARK: - Background detection worker (hidden)
+struct GarageDoorDetectionWorker: View {
+    let cameraUrl: String
+    let cameraUsername: String
+    let cameraPassword: String
+
+    @ObservedObject private var detector = GarageDoorDetector.shared
+    @State private var statusMessage: String? = nil
+    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
+    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
+    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+
+    var body: some View {
+        let rtspUrl = constructRtspUrl()
+        Group {
+            if !rtspUrl.isEmpty {
+                CameraView(
+                    url: rtspUrl,
+                    statusMessage: $statusMessage,
+                    onSnapshot: { path in detector.analyze(imagePath: path) },
+                    snapshotInterval: TimeInterval(max(1, detectionInterval)),
+                    networkCachingMs: cameraNetworkCachingMs,
+                    liveCachingMs: cameraLiveCachingMs
+                )
             }
         }
     }

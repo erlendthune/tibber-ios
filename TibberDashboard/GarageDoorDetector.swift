@@ -61,7 +61,6 @@ class GarageDoorDetector: ObservableObject {
         }
 
         DispatchQueue.main.async {
-            self.objectWillChange.send()
             self.lastSnapshot = image
             self.lastSnapshotDate = Date()
         }
@@ -115,14 +114,12 @@ class GarageDoorDetector: ObservableObject {
                 guard newState != self.doorState else {
                     // State unchanged, skip logging and alert handling
                     if detectedConfidence != self.confidence {
-                        self.objectWillChange.send()
                         self.confidence = detectedConfidence
                     }
                     return
                 }
                 
                 AppLog.debug(.camera, "Publishing detector update on main thread. oldState=\(self.doorState.rawValue) newState=\(newState.rawValue) oldConfidence=\(self.confidence) newConfidence=\(detectedConfidence) hadSnapshot=\(self.lastSnapshot != nil)")
-                self.objectWillChange.send()
                 self.confidence = detectedConfidence
                 self.doorState = newState
                 self.handleAlertStateTransition(newState)
