@@ -469,6 +469,7 @@ struct GarageDoorCameraCard: View {
                 Spacer()
                 if let headerStateText {
                     Text(headerStateText)
+                        .id("header_\(detector.doorState.rawValue)")
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(detector.doorState == .unknown ? .secondary : (detector.doorState == .open ? .orange : .green))
@@ -498,12 +499,14 @@ struct GarageDoorCameraCard: View {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
+                                .id(detector.lastSnapshotDate?.timeIntervalSince1970 ?? 0)
                         } else {
                             ZStack {
                                 Color(.systemGray5)
                                 Image(systemName: "photo")
                                     .foregroundColor(.secondary)
                             }
+                            .id("no_snapshot")
                         }
                     }
                     .frame(width: 84, height: 54)
@@ -511,17 +514,21 @@ struct GarageDoorCameraCard: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(detailStateText)
+                            .id("detail_\(detector.doorState.rawValue)")
                             .font(.subheadline)
                             .foregroundColor(.primary)
                         Text("Confidence: \(Int(detector.confidence * 100))%")
+                            .id("conf_\(detector.confidence)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         if let date = detector.lastSnapshotDate {
                             Text("Updated: \(date.formatted(date: .omitted, time: .standard))")
+                                .id("date_\(date.timeIntervalSince1970)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else {
                             Text("Updated: --")
+                                .id("date_none")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
