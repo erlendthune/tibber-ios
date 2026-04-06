@@ -13,6 +13,7 @@ struct CameraView: UIViewRepresentable {
     var snapshotInterval: TimeInterval = 5
     var networkCachingMs: Int = 1000
     var liveCachingMs: Int = 1000
+    var snapshotFileName: String = "garage_snapshot.png"
 
     func makeCoordinator() -> Coordinator {
         let coordinator = Coordinator(statusMessage: $statusMessage)
@@ -20,6 +21,7 @@ struct CameraView: UIViewRepresentable {
         coordinator.snapshotInterval = snapshotInterval
         coordinator.networkCachingMs = networkCachingMs
         coordinator.liveCachingMs = liveCachingMs
+        coordinator.snapshotFileName = snapshotFileName
         return coordinator
     }
 
@@ -37,7 +39,8 @@ struct CameraView: UIViewRepresentable {
             onSnapshot: onSnapshot,
             snapshotInterval: snapshotInterval,
             networkCachingMs: networkCachingMs,
-            liveCachingMs: liveCachingMs
+            liveCachingMs: liveCachingMs,
+            snapshotFileName: snapshotFileName
         )
     }
 
@@ -68,6 +71,7 @@ struct CameraView: UIViewRepresentable {
         var snapshotInterval: TimeInterval = 5
         var networkCachingMs: Int = 1000
         var liveCachingMs: Int = 1000
+        var snapshotFileName: String = "garage_snapshot.png"
         private var snapshotTimer: Timer? = nil
         private var snapshotTickCount: Int = 0
         private var lastPlayingAt: Date = .distantPast
@@ -108,7 +112,8 @@ struct CameraView: UIViewRepresentable {
             onSnapshot: ((String) -> Void)?,
             snapshotInterval: TimeInterval,
             networkCachingMs: Int,
-            liveCachingMs: Int
+            liveCachingMs: Int,
+            snapshotFileName: String
         ) {
             let shouldReconnect = self.streamUrl != url
                 || self.networkCachingMs != networkCachingMs
@@ -121,6 +126,7 @@ struct CameraView: UIViewRepresentable {
             self.snapshotInterval = snapshotInterval
             self.networkCachingMs = networkCachingMs
             self.liveCachingMs = liveCachingMs
+            self.snapshotFileName = snapshotFileName
 
             if shouldReconnect, isActive {
                 AppLog.info(.camera, "CameraView configuration changed. Reconnecting stream with updated settings.")
@@ -269,7 +275,7 @@ struct CameraView: UIViewRepresentable {
                     AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount) skipped: stream not stable yet (\(String(format: "%.2f", stableSeconds))s)")
                     return
                 }
-                let path = NSTemporaryDirectory() + "garage_snapshot.png"
+                let path = NSTemporaryDirectory() + self.snapshotFileName
                 try? FileManager.default.removeItem(atPath: path)
                 player.saveVideoSnapshot(at: path, withWidth: 0, andHeight: 0)
                 AppLog.debug(.camera, "Snapshot tick #\(self.snapshotTickCount): snapshot requested (videoTracks=\(player.numberOfVideoTracks))")
@@ -332,7 +338,7 @@ struct CameraView: UIViewRepresentable {
                 AppLog.warning(.camera, "mediaPlayerSnapshot called without VLCMediaPlayer object")
                 return
             }
-            let path = NSTemporaryDirectory() + "garage_snapshot.png"
+            let path = NSTemporaryDirectory() + snapshotFileName
             AppLog.debug(.camera, "mediaPlayerSnapshot delegate called for path: \(path)")
             if UIImage(contentsOfFile: path) != nil {
                 AppLog.info(.camera, "Snapshot file ready; invoking callback")

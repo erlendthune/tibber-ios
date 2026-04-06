@@ -18,6 +18,17 @@ struct SettingsView: View {
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
     @AppStorage("garageDoorConfidenceThreshold") private var confidenceThreshold: Double = 0.75
     @AppStorage("garageDoorAlertRepeatMinutes") private var alertRepeatMinutes: Int = 5
+    @AppStorage("catFeederCameraUrl") private var catFeederCameraUrl: String = ""
+    @AppStorage("catFeederCameraUsername") private var catFeederCameraUsername: String = ""
+    @AppStorage("catFeederCameraPassword") private var catFeederCameraPassword: String = ""
+    @AppStorage("catFeederCameraNetworkCachingMs") private var catFeederCameraNetworkCachingMs: Int = 1000
+    @AppStorage("catFeederCameraLiveCachingMs") private var catFeederCameraLiveCachingMs: Int = 1000
+    @AppStorage("catFeederLearnModeEnabled") private var catFeederLearnModeEnabled: Bool = false
+    @AppStorage("catFeederLearnModeIntervalMinutes") private var catFeederLearnModeIntervalMinutes: Int = 15
+    @AppStorage("catFeederDetectionEnabled") private var catFeederDetectionEnabled: Bool = false
+    @AppStorage("catFeederDetectionInterval") private var catFeederDetectionInterval: Int = 5
+    @AppStorage("catFeederConfidenceThreshold") private var catFeederConfidenceThreshold: Double = 0.75
+    @AppStorage("catFeederAlertRepeatMinutes") private var catFeederAlertRepeatMinutes: Int = 30
     @AppStorage("log.enabled.camera") private var logCamera: Bool = true
     @AppStorage("log.enabled.tibber") private var logTibber: Bool = false
     @AppStorage("log.enabled.zaptec") private var logZaptec: Bool = false
@@ -27,6 +38,7 @@ struct SettingsView: View {
     @State private var isApiKeyVisible: Bool = false
     @State private var isHomeIdVisible: Bool = false
     @State private var isCameraPasswordVisible: Bool = false
+    @State private var isCatFeederCameraPasswordVisible: Bool = false
     @State private var isZaptecPasswordVisible: Bool = false
     @State private var isTelegramTokenVisible: Bool = false
     @State private var showAddTelegramRecipient: Bool = false
@@ -53,11 +65,22 @@ struct SettingsView: View {
         var cameraLiveCachingMs: Int
         var learnModeEnabled: Bool
         var learnModeIntervalMinutes: Int
+        var catFeederCameraUrl: String
+        var catFeederCameraUsername: String
+        var catFeederCameraPassword: String
+        var catFeederCameraNetworkCachingMs: Int
+        var catFeederCameraLiveCachingMs: Int
+        var catFeederLearnModeEnabled: Bool
+        var catFeederLearnModeIntervalMinutes: Int
 
         var detectionEnabled: Bool
         var detectionInterval: Int
         var confidenceThreshold: Double
         var alertRepeatMinutes: Int
+        var catFeederDetectionEnabled: Bool
+        var catFeederDetectionInterval: Int
+        var catFeederConfidenceThreshold: Double
+        var catFeederAlertRepeatMinutes: Int
 
         var logCamera: Bool
         var logTibber: Bool
@@ -325,6 +348,96 @@ struct SettingsView: View {
                         step: 1
                     )
                     .disabled(!detectionEnabled)
+                }
+
+                Section(header: Text("Cat Feeder Camera (Optional)"), footer: Text("Provide RTSP URL and credentials to monitor whether the feeder bowl is empty.")) {
+                    TextField("RTSP URL (rtsp://ip:port/stream)", text: $catFeederCameraUrl)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    TextField("Username", text: $catFeederCameraUsername)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    HStack {
+                        if isCatFeederCameraPasswordVisible {
+                            TextField("Password", text: $catFeederCameraPassword)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("Password", text: $catFeederCameraPassword)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        Button(action: {
+                            isCatFeederCameraPasswordVisible.toggle()
+                        }) {
+                            Image(systemName: isCatFeederCameraPasswordVisible ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Stepper(
+                        "Network Buffer: \(catFeederCameraNetworkCachingMs) ms",
+                        value: $catFeederCameraNetworkCachingMs,
+                        in: 250...3000,
+                        step: 250
+                    )
+
+                    Stepper(
+                        "Live Buffer: \(catFeederCameraLiveCachingMs) ms",
+                        value: $catFeederCameraLiveCachingMs,
+                        in: 250...3000,
+                        step: 250
+                    )
+
+                    Button("Use Stable Stream Defaults") {
+                        catFeederCameraNetworkCachingMs = 1000
+                        catFeederCameraLiveCachingMs = 1000
+                    }
+                }
+
+                Section(
+                    header: Text("Cat Feeder Camera Learn Mode"),
+                    footer: Text("When enabled, the app saves feeder snapshots to your Photos library at the selected interval so you can improve your training dataset.")
+                ) {
+                    Toggle("Enable Learn Mode", isOn: $catFeederLearnModeEnabled)
+
+                    Stepper(
+                        "Save snapshot every \(catFeederLearnModeIntervalMinutes) min",
+                        value: $catFeederLearnModeIntervalMinutes,
+                        in: 1...240,
+                        step: 1
+                    )
+                    .disabled(!catFeederLearnModeEnabled)
+                }
+
+                Section(
+                    header: Text("Cat Feeder Detection (Optional)"),
+                    footer: Text("Analyzes feeder snapshots and classifies bowl state as empty or not empty. When empty persists, reminders repeat at the configured interval.")
+                ) {
+                    Toggle("Enable Detection", isOn: $catFeederDetectionEnabled)
+                    Stepper(
+                        "Check every \(catFeederDetectionInterval) s",
+                        value: $catFeederDetectionInterval,
+                        in: 1...30,
+                        step: 1
+                    )
+                    .disabled(!catFeederDetectionEnabled)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Confidence threshold: \(Int(catFeederConfidenceThreshold * 100))%")
+                        Slider(value: $catFeederConfidenceThreshold, in: 0.5...1.0, step: 0.05)
+                    }
+                    .disabled(!catFeederDetectionEnabled)
+
+                    Stepper(
+                        "Repeat empty alert every \(catFeederAlertRepeatMinutes) min",
+                        value: $catFeederAlertRepeatMinutes,
+                        in: 1...120,
+                        step: 1
+                    )
+                    .disabled(!catFeederDetectionEnabled)
                 }
 
                 Section(
@@ -623,10 +736,21 @@ struct SettingsView: View {
             cameraLiveCachingMs: cameraLiveCachingMs,
             learnModeEnabled: learnModeEnabled,
             learnModeIntervalMinutes: learnModeIntervalMinutes,
+            catFeederCameraUrl: catFeederCameraUrl,
+            catFeederCameraUsername: catFeederCameraUsername,
+            catFeederCameraPassword: catFeederCameraPassword,
+            catFeederCameraNetworkCachingMs: catFeederCameraNetworkCachingMs,
+            catFeederCameraLiveCachingMs: catFeederCameraLiveCachingMs,
+            catFeederLearnModeEnabled: catFeederLearnModeEnabled,
+            catFeederLearnModeIntervalMinutes: catFeederLearnModeIntervalMinutes,
             detectionEnabled: detectionEnabled,
             detectionInterval: detectionInterval,
             confidenceThreshold: confidenceThreshold,
             alertRepeatMinutes: alertRepeatMinutes,
+            catFeederDetectionEnabled: catFeederDetectionEnabled,
+            catFeederDetectionInterval: catFeederDetectionInterval,
+            catFeederConfidenceThreshold: catFeederConfidenceThreshold,
+            catFeederAlertRepeatMinutes: catFeederAlertRepeatMinutes,
             logCamera: logCamera,
             logTibber: logTibber,
             logZaptec: logZaptec,
@@ -662,11 +786,22 @@ struct SettingsView: View {
         cameraLiveCachingMs = snapshot.cameraLiveCachingMs
         learnModeEnabled = snapshot.learnModeEnabled
         learnModeIntervalMinutes = snapshot.learnModeIntervalMinutes
+        catFeederCameraUrl = snapshot.catFeederCameraUrl
+        catFeederCameraUsername = snapshot.catFeederCameraUsername
+        catFeederCameraPassword = snapshot.catFeederCameraPassword
+        catFeederCameraNetworkCachingMs = snapshot.catFeederCameraNetworkCachingMs
+        catFeederCameraLiveCachingMs = snapshot.catFeederCameraLiveCachingMs
+        catFeederLearnModeEnabled = snapshot.catFeederLearnModeEnabled
+        catFeederLearnModeIntervalMinutes = snapshot.catFeederLearnModeIntervalMinutes
 
         detectionEnabled = snapshot.detectionEnabled
         detectionInterval = snapshot.detectionInterval
         confidenceThreshold = snapshot.confidenceThreshold
         alertRepeatMinutes = snapshot.alertRepeatMinutes
+        catFeederDetectionEnabled = snapshot.catFeederDetectionEnabled
+        catFeederDetectionInterval = snapshot.catFeederDetectionInterval
+        catFeederConfidenceThreshold = snapshot.catFeederConfidenceThreshold
+        catFeederAlertRepeatMinutes = snapshot.catFeederAlertRepeatMinutes
 
         logCamera = snapshot.logCamera
         logTibber = snapshot.logTibber

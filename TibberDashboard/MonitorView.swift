@@ -4,6 +4,8 @@ struct MonitorView: View {
     private enum MonitorCardKind: String {
         case garageStatus
         case garageLiveFeed
+        case catFeederStatus
+        case catFeederLiveFeed
         case tibberTop3
         case websocketTop3
         case zaptec
@@ -11,10 +13,12 @@ struct MonitorView: View {
 
     @ObservedObject var store: TibberMonitorStore
     @ObservedObject private var garageDoorDetector = GarageDoorDetector.shared
+    @ObservedObject private var catFeederDetector = CatFeederDetector.shared
     @State private var showingSettings = false
     @State private var showingHelp = false
     @State private var showingLogs = false
     @State private var showingCamera = false
+    @State private var showingCatFeederCamera = false
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
@@ -24,6 +28,9 @@ struct MonitorView: View {
     @AppStorage("cameraUrl") private var cameraUrl: String = ""
     @AppStorage("cameraUsername") private var cameraUsername: String = ""
     @AppStorage("cameraPassword") private var cameraPassword: String = ""
+    @AppStorage("catFeederCameraUrl") private var catFeederCameraUrl: String = ""
+    @AppStorage("catFeederCameraUsername") private var catFeederCameraUsername: String = ""
+    @AppStorage("catFeederCameraPassword") private var catFeederCameraPassword: String = ""
     
     // Inject the store reference into the App's Zaptec instance right at load.
     init(store: TibberMonitorStore) {
@@ -35,11 +42,19 @@ struct MonitorView: View {
         !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty
     }
 
+    private var hasCatFeederCameraCredentials: Bool {
+        !catFeederCameraUrl.isEmpty && !catFeederCameraUsername.isEmpty && !catFeederCameraPassword.isEmpty
+    }
+
     private var availableCardKinds: [MonitorCardKind] {
         var cards: [MonitorCardKind] = []
         if hasCameraCredentials {
             cards.append(.garageStatus)
             cards.append(.garageLiveFeed)
+        }
+        if hasCatFeederCameraCredentials {
+            cards.append(.catFeederStatus)
+            cards.append(.catFeederLiveFeed)
         }
         if store.showMonthlyTop3Usage {
             cards.append(.tibberTop3)
@@ -55,6 +70,10 @@ struct MonitorView: View {
 
     private var isLiveFeedPageSelected: Bool {
         selectedCard == .garageLiveFeed
+    }
+
+    private var isCatFeederLiveFeedPageSelected: Bool {
+        selectedCard == .catFeederLiveFeed
     }
 
     private func normalizeCardSelection() {
@@ -167,6 +186,27 @@ struct MonitorView: View {
                         .disabled(store.isScreensaverActive)
                     }
 
+                    if hasCatFeederCameraCredentials {
+                        Button(action: {
+                            showingCatFeederCamera = true
+                        }) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "pawprint.circle")
+                                    .font(.title2)
+                                    .foregroundColor(.primary)
+                                    .padding(.vertical)
+                                    .padding(.horizontal, 8)
+                                if catFeederDetector.bowlState != .unknown {
+                                    Circle()
+                                        .fill(catFeederDetector.bowlState == .empty ? Color.red : Color.green)
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: 4, y: 6)
+                                }
+                            }
+                        }
+                        .disabled(store.isScreensaverActive)
+                    }
+
                     Spacer()
                     
                     // Screensaver button right aligned before Settings
@@ -222,6 +262,18 @@ struct MonitorView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
+
+            if hasCatFeederCameraCredentials && !isCatFeederLiveFeedPageSelected && !showingCatFeederCamera {
+                CatFeederDetectionWorker(
+                    cameraUrl: catFeederCameraUrl,
+                    cameraUsername: catFeederCameraUsername,
+                    cameraPassword: catFeederCameraPassword
+                )
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         }
         .statusBarHidden(true) // Hides the top status bar (battery, time, etc.) for a cleaner look
         .sheet(isPresented: $showingSettings) {
@@ -243,6 +295,13 @@ struct MonitorView: View {
         .sheet(isPresented: $showingCamera) {
             CameraViewSheet(cameraUrl: cameraUrl, cameraUsername: cameraUsername, cameraPassword: cameraPassword)
         }
+        .sheet(isPresented: $showingCatFeederCamera) {
+            CatFeederCameraViewSheet(
+                cameraUrl: catFeederCameraUrl,
+                cameraUsername: catFeederCameraUsername,
+                cameraPassword: catFeederCameraPassword
+            )
+        }
         .onDisappear {
             store.disconnect()
             ZaptecManager.shared.stopPolling()
@@ -257,6 +316,9 @@ struct MonitorView: View {
             }
         }
         .onChange(of: hasCameraCredentials) { _ in
+            normalizeCardSelection()
+        }
+        .onChange(of: hasCatFeederCameraCredentials) { _ in
             normalizeCardSelection()
         }
         .onChange(of: store.showMonthlyTop3Usage) { _ in
@@ -365,6 +427,17 @@ struct MonitorView: View {
                                 cameraUsername: cameraUsername,
                                 cameraPassword: cameraPassword,
                                 isActive: isLiveFeedPageSelected
+                            )
+                            .padding()
+                        case .catFeederStatus:
+                            CatFeederStatusCard()
+                                .padding()
+                        case .catFeederLiveFeed:
+                            CatFeederLiveFeedCard(
+                                cameraUrl: catFeederCameraUrl,
+                                cameraUsername: catFeederCameraUsername,
+                                cameraPassword: catFeederCameraPassword,
+                                isActive: isCatFeederLiveFeedPageSelected
                             )
                             .padding()
                         case .tibberTop3:
