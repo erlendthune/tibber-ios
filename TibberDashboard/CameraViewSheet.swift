@@ -26,7 +26,7 @@ struct CameraViewSheet: View {
                     CameraView(
                         url: rtspUrl,
                         statusMessage: $statusMessage,
-                        onSnapshot: nil,
+                        onSnapshot: { path in detector.analyze(imagePath: path) },
                         snapshotInterval: TimeInterval(detectionInterval),
                         networkCachingMs: cameraNetworkCachingMs,
                         liveCachingMs: cameraLiveCachingMs

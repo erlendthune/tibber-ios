@@ -20,6 +20,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The app needs access to the local network to display the camera stream.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The app saves camera snapshots to your Photos library for training and improving the garage door model.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_rtsp._tcp</string>
