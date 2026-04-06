@@ -54,6 +54,17 @@ struct HelpView: View {
                     Divider()
 
                     Group {
+                        Text("Garage Camera & Door Detection")
+                            .font(.headline)
+                        Text("The app supports an RTSP garage camera feed. Open Settings and fill in camera URL, username, and password under Garage Camera (Optional).")
+                        Text("From the dashboard, tap the camera button to open a full-screen live view. The app can also keep a hidden background stream active for door-state detection when the live feed page is not visible.")
+                        Text("Garage Door Detection analyzes snapshots from the stream to classify the door as open or closed. You can configure: detection enable/disable, check interval, confidence threshold, and repeated open-alert interval.")
+                        Text("Garage Camera Learn Mode can periodically save snapshots to your Photos library. Configure the interval in minutes, then review these images later to improve your training dataset.")
+                    }
+
+                    Divider()
+
+                    Group {
                         Text("Telegram Alerts")
                             .font(.headline)
                         Text("You can receive Telegram alerts when a critical threshold is triggered. Go to Settings and open Telegram (Optional).")

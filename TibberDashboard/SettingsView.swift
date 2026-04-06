@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("cameraPassword") private var cameraPassword: String = ""
     @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
     @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
+    @AppStorage("garageDoorLearnModeEnabled") private var learnModeEnabled: Bool = false
+    @AppStorage("garageDoorLearnModeIntervalMinutes") private var learnModeIntervalMinutes: Int = 15
     @AppStorage("garageDoorDetectionEnabled") private var detectionEnabled: Bool = false
     @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
     @AppStorage("garageDoorConfidenceThreshold") private var confidenceThreshold: Double = 0.75
@@ -49,6 +51,8 @@ struct SettingsView: View {
         var cameraPassword: String
         var cameraNetworkCachingMs: Int
         var cameraLiveCachingMs: Int
+        var learnModeEnabled: Bool
+        var learnModeIntervalMinutes: Int
 
         var detectionEnabled: Bool
         var detectionInterval: Int
@@ -278,6 +282,21 @@ struct SettingsView: View {
                         cameraNetworkCachingMs = 1000
                         cameraLiveCachingMs = 1000
                     }
+                }
+
+                Section(
+                    header: Text("Garage Camera Learn Mode"),
+                    footer: Text("When enabled, the app saves camera snapshots to your Photos library at the selected interval. Use these images to build a better training dataset for the garage door model.")
+                ) {
+                    Toggle("Enable Learn Mode", isOn: $learnModeEnabled)
+
+                    Stepper(
+                        "Save snapshot every \(learnModeIntervalMinutes) min",
+                        value: $learnModeIntervalMinutes,
+                        in: 1...240,
+                        step: 1
+                    )
+                    .disabled(!learnModeEnabled)
                 }
                 
                 Section(
@@ -602,6 +621,8 @@ struct SettingsView: View {
             cameraPassword: cameraPassword,
             cameraNetworkCachingMs: cameraNetworkCachingMs,
             cameraLiveCachingMs: cameraLiveCachingMs,
+            learnModeEnabled: learnModeEnabled,
+            learnModeIntervalMinutes: learnModeIntervalMinutes,
             detectionEnabled: detectionEnabled,
             detectionInterval: detectionInterval,
             confidenceThreshold: confidenceThreshold,
@@ -639,6 +660,8 @@ struct SettingsView: View {
         cameraPassword = snapshot.cameraPassword
         cameraNetworkCachingMs = snapshot.cameraNetworkCachingMs
         cameraLiveCachingMs = snapshot.cameraLiveCachingMs
+        learnModeEnabled = snapshot.learnModeEnabled
+        learnModeIntervalMinutes = snapshot.learnModeIntervalMinutes
 
         detectionEnabled = snapshot.detectionEnabled
         detectionInterval = snapshot.detectionInterval

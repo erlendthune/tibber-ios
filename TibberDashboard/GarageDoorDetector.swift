@@ -3,6 +3,7 @@ import SwiftUI
 import Vision
 import CoreML
 import OSLog
+import Photos
 
 class GarageDoorDetector: ObservableObject {
     static let shared = GarageDoorDetector()
@@ -17,6 +18,8 @@ class GarageDoorDetector: ObservableObject {
     @Published var lastSnapshotDate: Date? = nil
 
     @AppStorage("garageDoorDetectionEnabled") var isEnabled: Bool = false
+    @AppStorage("garageDoorLearnModeEnabled") var learnModeEnabled: Bool = false
+    @AppStorage("garageDoorLearnModeIntervalMinutes") var learnModeIntervalMinutes: Int = 15
     @AppStorage("garageDoorConfidenceThreshold") var confidenceThreshold: Double = 0.75
     @AppStorage("garageDoorAlertRepeatMinutes") var alertRepeatMinutes: Int = 5
 
@@ -24,6 +27,7 @@ class GarageDoorDetector: ObservableObject {
     private var vnModel: VNCoreMLModel?
     private var lastKnownState: DoorState = .unknown
     private var lastOpenAlertTime: Date = .distantPast
+    private var lastLearnSnapshotSavedAt: Date = .distantPast
 
     private func deleteSnapshotIfTemporary(_ imagePath: String) {
         let tempDir = NSTemporaryDirectory()
@@ -65,6 +69,8 @@ class GarageDoorDetector: ObservableObject {
             self.lastSnapshotDate = Date()
         }
         AppLog.debug(.camera, "Snapshot loaded and published to UI")
+
+        maybeSaveSnapshotToPhotosForLearning(image: image)
 
         guard isEnabled else {
             AppLog.debug(.camera, "Detection disabled in settings; skipping ML inference")
@@ -168,6 +174,47 @@ class GarageDoorDetector: ObservableObject {
 
         case .unknown:
             break
+        }
+    }
+
+    private func maybeSaveSnapshotToPhotosForLearning(image: UIImage) {
+        guard learnModeEnabled else { return }
+
+        let now = Date()
+        let intervalMinutes = max(1, learnModeIntervalMinutes)
+        let intervalSeconds = TimeInterval(intervalMinutes * 60)
+        guard now.timeIntervalSince(lastLearnSnapshotSavedAt) >= intervalSeconds else { return }
+
+        lastLearnSnapshotSavedAt = now
+
+        let saveToPhotos: () -> Void = {
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }) { success, error in
+                if success {
+                    AppLog.info(.camera, "Learn mode saved snapshot to Photos")
+                } else if let error {
+                    AppLog.error(.camera, "Learn mode failed to save snapshot: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        switch status {
+        case .authorized, .limited:
+            saveToPhotos()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                if newStatus == .authorized || newStatus == .limited {
+                    saveToPhotos()
+                } else {
+                    AppLog.warning(.camera, "Learn mode photo permission not granted")
+                }
+            }
+        case .denied, .restricted:
+            AppLog.warning(.camera, "Learn mode cannot save photos because Photos permission is denied/restricted")
+        @unknown default:
+            AppLog.warning(.camera, "Learn mode encountered unknown Photos authorization status")
         }
     }
 }
