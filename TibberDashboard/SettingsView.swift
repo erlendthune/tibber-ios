@@ -7,28 +7,30 @@ struct SettingsView: View {
     @StateObject private var zaptecManager = ZaptecManager.shared
     @StateObject private var telegramManager = TelegramManager.shared
 
-    @AppStorage("cameraUrl") private var cameraUrl: String = ""
-    @AppStorage("cameraUsername") private var cameraUsername: String = ""
-    @AppStorage("cameraPassword") private var cameraPassword: String = ""
-    @AppStorage("cameraNetworkCachingMs") private var cameraNetworkCachingMs: Int = 1000
-    @AppStorage("cameraLiveCachingMs") private var cameraLiveCachingMs: Int = 1000
-    @AppStorage("garageDoorLearnModeEnabled") private var learnModeEnabled: Bool = false
-    @AppStorage("garageDoorLearnModeIntervalMinutes") private var learnModeIntervalMinutes: Int = 15
-    @AppStorage("garageDoorDetectionEnabled") private var detectionEnabled: Bool = false
-    @AppStorage("garageDoorDetectionInterval") private var detectionInterval: Int = 5
-    @AppStorage("garageDoorConfidenceThreshold") private var confidenceThreshold: Double = 0.75
-    @AppStorage("garageDoorAlertRepeatMinutes") private var alertRepeatMinutes: Int = 5
-    @AppStorage("catFeederCameraUrl") private var catFeederCameraUrl: String = ""
-    @AppStorage("catFeederCameraUsername") private var catFeederCameraUsername: String = ""
-    @AppStorage("catFeederCameraPassword") private var catFeederCameraPassword: String = ""
-    @AppStorage("catFeederCameraNetworkCachingMs") private var catFeederCameraNetworkCachingMs: Int = 1000
-    @AppStorage("catFeederCameraLiveCachingMs") private var catFeederCameraLiveCachingMs: Int = 1000
-    @AppStorage("catFeederLearnModeEnabled") private var catFeederLearnModeEnabled: Bool = false
-    @AppStorage("catFeederLearnModeIntervalMinutes") private var catFeederLearnModeIntervalMinutes: Int = 15
-    @AppStorage("catFeederDetectionEnabled") private var catFeederDetectionEnabled: Bool = false
-    @AppStorage("catFeederDetectionInterval") private var catFeederDetectionInterval: Int = 5
-    @AppStorage("catFeederConfidenceThreshold") private var catFeederConfidenceThreshold: Double = 0.75
-    @AppStorage("catFeederAlertRepeatMinutes") private var catFeederAlertRepeatMinutes: Int = 30
+    // Camera settings: use @State to prevent immediate saving during editing
+    @State private var cameraUrl: String = UserDefaults.standard.string(forKey: "cameraUrl") ?? ""
+    @State private var cameraUsername: String = UserDefaults.standard.string(forKey: "cameraUsername") ?? ""
+    @State private var cameraPassword: String = UserDefaults.standard.string(forKey: "cameraPassword") ?? ""
+    @State private var cameraNetworkCachingMs: Int = UserDefaults.standard.integer(forKey: "cameraNetworkCachingMs") == 0 ? 1000 : UserDefaults.standard.integer(forKey: "cameraNetworkCachingMs")
+    @State private var cameraLiveCachingMs: Int = UserDefaults.standard.integer(forKey: "cameraLiveCachingMs") == 0 ? 1000 : UserDefaults.standard.integer(forKey: "cameraLiveCachingMs")
+    @State private var learnModeEnabled: Bool = UserDefaults.standard.bool(forKey: "garageDoorLearnModeEnabled")
+    @State private var learnModeIntervalMinutes: Int = UserDefaults.standard.integer(forKey: "garageDoorLearnModeIntervalMinutes") == 0 ? 15 : UserDefaults.standard.integer(forKey: "garageDoorLearnModeIntervalMinutes")
+    @State private var detectionEnabled: Bool = UserDefaults.standard.bool(forKey: "garageDoorDetectionEnabled")
+    @State private var detectionInterval: Int = UserDefaults.standard.integer(forKey: "garageDoorDetectionInterval") == 0 ? 5 : UserDefaults.standard.integer(forKey: "garageDoorDetectionInterval")
+    @State private var confidenceThreshold: Double = UserDefaults.standard.double(forKey: "garageDoorConfidenceThreshold") == 0 ? 0.75 : UserDefaults.standard.double(forKey: "garageDoorConfidenceThreshold")
+    @State private var alertRepeatMinutes: Int = UserDefaults.standard.integer(forKey: "garageDoorAlertRepeatMinutes") == 0 ? 5 : UserDefaults.standard.integer(forKey: "garageDoorAlertRepeatMinutes")
+    @State private var catFeederCameraUrl: String = UserDefaults.standard.string(forKey: "catFeederCameraUrl") ?? ""
+    @State private var catFeederCameraUsername: String = UserDefaults.standard.string(forKey: "catFeederCameraUsername") ?? ""
+    @State private var catFeederCameraPassword: String = UserDefaults.standard.string(forKey: "catFeederCameraPassword") ?? ""
+    @State private var catFeederCameraNetworkCachingMs: Int = UserDefaults.standard.integer(forKey: "catFeederCameraNetworkCachingMs") == 0 ? 1000 : UserDefaults.standard.integer(forKey: "catFeederCameraNetworkCachingMs")
+    @State private var catFeederCameraLiveCachingMs: Int = UserDefaults.standard.integer(forKey: "catFeederCameraLiveCachingMs") == 0 ? 1000 : UserDefaults.standard.integer(forKey: "catFeederCameraLiveCachingMs")
+    @State private var catFeederLearnModeEnabled: Bool = UserDefaults.standard.bool(forKey: "catFeederLearnModeEnabled")
+    @State private var catFeederLearnModeIntervalMinutes: Int = UserDefaults.standard.integer(forKey: "catFeederLearnModeIntervalMinutes") == 0 ? 15 : UserDefaults.standard.integer(forKey: "catFeederLearnModeIntervalMinutes")
+    @State private var catFeederDetectionEnabled: Bool = UserDefaults.standard.bool(forKey: "catFeederDetectionEnabled")
+    @State private var catFeederDetectionInterval: Int = UserDefaults.standard.integer(forKey: "catFeederDetectionInterval") == 0 ? 5 : UserDefaults.standard.integer(forKey: "catFeederDetectionInterval")
+    @State private var catFeederConfidenceThreshold: Double = UserDefaults.standard.double(forKey: "catFeederConfidenceThreshold") == 0 ? 0.75 : UserDefaults.standard.double(forKey: "catFeederConfidenceThreshold")
+    @State private var catFeederAlertRepeatMinutes: Int = UserDefaults.standard.integer(forKey: "catFeederAlertRepeatMinutes") == 0 ? 30 : UserDefaults.standard.integer(forKey: "catFeederAlertRepeatMinutes")
+    
     @AppStorage("log.enabled.camera") private var logCamera: Bool = true
     @AppStorage("log.enabled.tibber") private var logTibber: Bool = false
     @AppStorage("log.enabled.zaptec") private var logZaptec: Bool = false
@@ -712,6 +714,8 @@ struct SettingsView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(hasUnsavedChanges ? "Save" : "Done") {
+                        // Persist camera and detection settings to UserDefaults
+                        persistCameraSettings()
                         originalSnapshot = currentSnapshot()
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -827,5 +831,32 @@ struct SettingsView: View {
         } else {
             telegramManager.chatRecipients = []
         }
+    }
+
+    private func persistCameraSettings() {
+        // Save camera and detection settings to UserDefaults only on Save
+        UserDefaults.standard.set(cameraUrl, forKey: "cameraUrl")
+        UserDefaults.standard.set(cameraUsername, forKey: "cameraUsername")
+        UserDefaults.standard.set(cameraPassword, forKey: "cameraPassword")
+        UserDefaults.standard.set(cameraNetworkCachingMs, forKey: "cameraNetworkCachingMs")
+        UserDefaults.standard.set(cameraLiveCachingMs, forKey: "cameraLiveCachingMs")
+        UserDefaults.standard.set(learnModeEnabled, forKey: "garageDoorLearnModeEnabled")
+        UserDefaults.standard.set(learnModeIntervalMinutes, forKey: "garageDoorLearnModeIntervalMinutes")
+        UserDefaults.standard.set(detectionEnabled, forKey: "garageDoorDetectionEnabled")
+        UserDefaults.standard.set(detectionInterval, forKey: "garageDoorDetectionInterval")
+        UserDefaults.standard.set(confidenceThreshold, forKey: "garageDoorConfidenceThreshold")
+        UserDefaults.standard.set(alertRepeatMinutes, forKey: "garageDoorAlertRepeatMinutes")
+        
+        UserDefaults.standard.set(catFeederCameraUrl, forKey: "catFeederCameraUrl")
+        UserDefaults.standard.set(catFeederCameraUsername, forKey: "catFeederCameraUsername")
+        UserDefaults.standard.set(catFeederCameraPassword, forKey: "catFeederCameraPassword")
+        UserDefaults.standard.set(catFeederCameraNetworkCachingMs, forKey: "catFeederCameraNetworkCachingMs")
+        UserDefaults.standard.set(catFeederCameraLiveCachingMs, forKey: "catFeederCameraLiveCachingMs")
+        UserDefaults.standard.set(catFeederLearnModeEnabled, forKey: "catFeederLearnModeEnabled")
+        UserDefaults.standard.set(catFeederLearnModeIntervalMinutes, forKey: "catFeederLearnModeIntervalMinutes")
+        UserDefaults.standard.set(catFeederDetectionEnabled, forKey: "catFeederDetectionEnabled")
+        UserDefaults.standard.set(catFeederDetectionInterval, forKey: "catFeederDetectionInterval")
+        UserDefaults.standard.set(catFeederConfidenceThreshold, forKey: "catFeederConfidenceThreshold")
+        UserDefaults.standard.set(catFeederAlertRepeatMinutes, forKey: "catFeederAlertRepeatMinutes")
     }
 }
