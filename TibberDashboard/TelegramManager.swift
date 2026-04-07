@@ -89,6 +89,38 @@ class TelegramManager: ObservableObject {
         }
     }
 
+    // MARK: - Cat Feeder Alerts
+
+    func notifyCatFeeder(isEmpty: Bool, isReminder: Bool = false) {
+        guard isEnabled, !botToken.isEmpty else { return }
+
+        let text: String
+        let alertDescription: String
+        if isEmpty {
+            text = isReminder ? "🐱 *Cat feeder bowl is still EMPTY*" : "🐱 *Cat feeder bowl is EMPTY*"
+            alertDescription = isReminder ? "EMPTY reminder" : "EMPTY"
+        } else {
+            text = "🐱 *Cat feeder bowl is NOT EMPTY*"
+            alertDescription = "NOT EMPTY"
+        }
+
+        for recipient in chatRecipients {
+            guard !recipient.chatId.isEmpty else { continue }
+
+            let urlString = "https://api.telegram.org/bot\(botToken)/sendMessage?chat_id=\(recipient.chatId)&text=\(text)&parse_mode=Markdown"
+            guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let url = URL(string: encoded) else { continue }
+
+            URLSession.shared.dataTask(with: url) { _, _, error in
+                if let error = error {
+                    print("Cat feeder Telegram alert failed for \(recipient.name): \(error.localizedDescription)")
+                } else {
+                    print("Cat feeder alert (\(alertDescription)) sent to \(recipient.name)!")
+                }
+            }.resume()
+        }
+    }
+
     func notifyTelegram(powerValue: Double) {
         guard isEnabled, !botToken.isEmpty else { return }
 

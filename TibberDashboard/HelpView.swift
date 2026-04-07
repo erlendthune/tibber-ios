@@ -65,6 +65,18 @@ struct HelpView: View {
                     Divider()
 
                     Group {
+                        Text("Cat Feeder Camera & Bowl Detection")
+                            .font(.headline)
+                        Text("You can configure a separate RTSP camera for your cat feeder in Settings under Cat Feeder Camera (Optional).")
+                        Text("The feeder model classifies each snapshot as bowl empty or bowl not empty.")
+                        Text("Like the garage flow, detection can run in the background when the feeder live-feed page is not selected.")
+                        Text("Cat feeder alerts support repeated reminders while the bowl remains empty, using a separate repeat interval setting.")
+                        Text("Cat feeder learn mode can also save snapshots to Photos at a minute-based interval to improve your training dataset.")
+                    }
+
+                    Divider()
+
+                    Group {
                         Text("Telegram Alerts")
                             .font(.headline)
                         Text("You can receive Telegram alerts when a critical threshold is triggered. Go to Settings and open Telegram (Optional).")

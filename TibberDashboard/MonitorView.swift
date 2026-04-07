@@ -4,6 +4,8 @@ struct MonitorView: View {
     private enum MonitorCardKind: String {
         case garageStatus
         case garageLiveFeed
+        case catFeederStatus
+        case catFeederLiveFeed
         case tibberTop3
         case websocketTop3
         case zaptec
@@ -11,19 +13,26 @@ struct MonitorView: View {
 
     @ObservedObject var store: TibberMonitorStore
     @ObservedObject private var garageDoorDetector = GarageDoorDetector.shared
+    @ObservedObject private var catFeederDetector = CatFeederDetector.shared
     @State private var showingSettings = false
     @State private var showingHelp = false
     @State private var showingLogs = false
     @State private var showingCamera = false
+    @State private var showingCatFeederCamera = false
     @State private var originalApiKey = ""
     @State private var originalHomeId = ""
     @State private var selectedLogTab = 0 // 0 for Connection, 1 for Data
-    @State private var selectedCard: MonitorCardKind = .garageStatus
+    @State private var selectedPageIndex: Int = 0
     
     // Camera settings from AppStorage
     @AppStorage("cameraUrl") private var cameraUrl: String = ""
     @AppStorage("cameraUsername") private var cameraUsername: String = ""
     @AppStorage("cameraPassword") private var cameraPassword: String = ""
+    @AppStorage("catFeederCameraUrl") private var catFeederCameraUrl: String = ""
+    @AppStorage("catFeederCameraUsername") private var catFeederCameraUsername: String = ""
+    @AppStorage("catFeederCameraPassword") private var catFeederCameraPassword: String = ""
+    @AppStorage("garageDoorDetectionEnabled") private var garageDoorDetectionEnabled: Bool = false
+    @AppStorage("catFeederDetectionEnabled") private var catFeederDetectionEnabled: Bool = false
     
     // Inject the store reference into the App's Zaptec instance right at load.
     init(store: TibberMonitorStore) {
@@ -35,11 +44,31 @@ struct MonitorView: View {
         !cameraUrl.isEmpty && !cameraUsername.isEmpty && !cameraPassword.isEmpty
     }
 
+    private var hasCatFeederCameraCredentials: Bool {
+        !catFeederCameraUrl.isEmpty && !catFeederCameraUsername.isEmpty && !catFeederCameraPassword.isEmpty
+    }
+
+    private var showGarageStatusCard: Bool {
+        garageDoorDetectionEnabled
+    }
+
+    private var showCatFeederStatusCard: Bool {
+        catFeederDetectionEnabled
+    }
+
     private var availableCardKinds: [MonitorCardKind] {
         var cards: [MonitorCardKind] = []
-        if hasCameraCredentials {
+        if showGarageStatusCard {
             cards.append(.garageStatus)
+        }
+        if hasCameraCredentials {
             cards.append(.garageLiveFeed)
+        }
+        if showCatFeederStatusCard {
+            cards.append(.catFeederStatus)
+        }
+        if hasCatFeederCameraCredentials {
+            cards.append(.catFeederLiveFeed)
         }
         if store.showMonthlyTop3Usage {
             cards.append(.tibberTop3)
@@ -53,17 +82,28 @@ struct MonitorView: View {
         return cards
     }
 
-    private var isLiveFeedPageSelected: Bool {
-        selectedCard == .garageLiveFeed
+    private var selectedCardKind: MonitorCardKind? {
+        guard availableCardKinds.indices.contains(selectedPageIndex) else {
+            return nil
+        }
+        return availableCardKinds[selectedPageIndex]
     }
 
-    private func normalizeCardSelection() {
-        guard let first = availableCardKinds.first else {
-            selectedCard = .garageStatus
+    private var isLiveFeedPageSelected: Bool {
+        selectedCardKind == .garageLiveFeed
+    }
+
+    private var isCatFeederLiveFeedPageSelected: Bool {
+        selectedCardKind == .catFeederLiveFeed
+    }
+
+    private func normalizePageSelection() {
+        guard !availableCardKinds.isEmpty else {
+            selectedPageIndex = 0
             return
         }
-        if !availableCardKinds.contains(selectedCard) {
-            selectedCard = first
+        if selectedPageIndex < 0 || selectedPageIndex >= availableCardKinds.count {
+            selectedPageIndex = 0
         }
     }
     
@@ -167,6 +207,27 @@ struct MonitorView: View {
                         .disabled(store.isScreensaverActive)
                     }
 
+                    if hasCatFeederCameraCredentials {
+                        Button(action: {
+                            showingCatFeederCamera = true
+                        }) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "pawprint.circle")
+                                    .font(.title2)
+                                    .foregroundColor(.primary)
+                                    .padding(.vertical)
+                                    .padding(.horizontal, 8)
+                                if catFeederDetector.bowlState != .unknown {
+                                    Circle()
+                                        .fill(catFeederDetector.bowlState == .empty ? Color.red : Color.green)
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: 4, y: 6)
+                                }
+                            }
+                        }
+                        .disabled(store.isScreensaverActive)
+                    }
+
                     Spacer()
                     
                     // Screensaver button right aligned before Settings
@@ -211,11 +272,23 @@ struct MonitorView: View {
 
             // Keep detector running even when user is not on the live-feed page.
             // Disable worker while live feed/sheet is visible to avoid dual RTSP sessions.
-            if hasCameraCredentials && !isLiveFeedPageSelected && !showingCamera {
+            if showGarageStatusCard && hasCameraCredentials && !isLiveFeedPageSelected && !showingCamera {
                 GarageDoorDetectionWorker(
                     cameraUrl: cameraUrl,
                     cameraUsername: cameraUsername,
                     cameraPassword: cameraPassword
+                )
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+
+            if showCatFeederStatusCard && hasCatFeederCameraCredentials && !isCatFeederLiveFeedPageSelected && !showingCatFeederCamera {
+                CatFeederDetectionWorker(
+                    cameraUrl: catFeederCameraUrl,
+                    cameraUsername: catFeederCameraUsername,
+                    cameraPassword: catFeederCameraPassword
                 )
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
@@ -243,12 +316,19 @@ struct MonitorView: View {
         .sheet(isPresented: $showingCamera) {
             CameraViewSheet(cameraUrl: cameraUrl, cameraUsername: cameraUsername, cameraPassword: cameraPassword)
         }
+        .sheet(isPresented: $showingCatFeederCamera) {
+            CatFeederCameraViewSheet(
+                cameraUrl: catFeederCameraUrl,
+                cameraUsername: catFeederCameraUsername,
+                cameraPassword: catFeederCameraPassword
+            )
+        }
         .onDisappear {
             store.disconnect()
             ZaptecManager.shared.stopPolling()
         }
         .onAppear {
-            normalizeCardSelection()
+            normalizePageSelection()
             if ZaptecManager.shared.token == nil && !ZaptecManager.shared.username.isEmpty {
                 ZaptecManager.shared.authenticate()
             }
@@ -257,16 +337,25 @@ struct MonitorView: View {
             }
         }
         .onChange(of: hasCameraCredentials) { _ in
-            normalizeCardSelection()
+            normalizePageSelection()
+        }
+        .onChange(of: hasCatFeederCameraCredentials) { _ in
+            normalizePageSelection()
+        }
+        .onChange(of: garageDoorDetectionEnabled) { _ in
+            normalizePageSelection()
+        }
+        .onChange(of: catFeederDetectionEnabled) { _ in
+            normalizePageSelection()
         }
         .onChange(of: store.showMonthlyTop3Usage) { _ in
-            normalizeCardSelection()
+            normalizePageSelection()
         }
         .onChange(of: store.showWebsocketTop3Usage) { _ in
-            normalizeCardSelection()
+            normalizePageSelection()
         }
         .onChange(of: ZaptecManager.shared.isAuthenticated) { _ in
-            normalizeCardSelection()
+            normalizePageSelection()
         }
     }
     
@@ -341,70 +430,87 @@ struct MonitorView: View {
         .padding(20)
     }
     
-    private var cardSetID: String {
-        availableCardKinds.map(\.rawValue).joined(separator: "_")
+    @ViewBuilder
+    private func pageView(for card: MonitorCardKind) -> some View {
+        switch card {
+        case .garageStatus:
+            GarageDoorStatusCard()
+                .padding()
+                .id(card.rawValue)
+        case .garageLiveFeed:
+            GarageDoorLiveFeedCard(
+                cameraUrl: cameraUrl,
+                cameraUsername: cameraUsername,
+                cameraPassword: cameraPassword,
+                isActive: isLiveFeedPageSelected
+            )
+            .padding()
+            .id(card.rawValue)
+        case .catFeederStatus:
+            CatFeederStatusCard()
+                .padding()
+                .id(card.rawValue)
+        case .catFeederLiveFeed:
+            CatFeederLiveFeedCard(
+                cameraUrl: catFeederCameraUrl,
+                cameraUsername: catFeederCameraUsername,
+                cameraPassword: catFeederCameraPassword,
+                isActive: isCatFeederLiveFeedPageSelected
+            )
+            .padding()
+            .id(card.rawValue)
+        case .tibberTop3:
+            ScrollView {
+                TopThreeUsageCard(store: store)
+                    .padding()
+            }
+            .id(card.rawValue)
+        case .websocketTop3:
+            ScrollView {
+                WebSocketTopThreeUsageCard(store: store)
+                    .padding()
+            }
+            .id(card.rawValue)
+        case .zaptec:
+            ScrollView {
+                ZaptecControlView(manager: ZaptecManager.shared)
+                    .padding()
+            }
+            .id(card.rawValue)
+        }
     }
 
     private func statsAndLog(for data: LiveMeasurement) -> some View {
-        // cardSetID forces a full TabView teardown/rebuild whenever the set of
-        // visible cards changes (settings toggles, auth changes etc.). This is
-        // intentional — it's the only reliable way to stop SwiftUI from showing
-        // stale/wrong page content in a dynamically-sized page TabView.
-        let setID = cardSetID
         return VStack(spacing: 8) {
-            TabView(selection: $selectedCard) {
-                ForEach(availableCardKinds, id: \.self) { card in
-                    Group {
-                        switch card {
-                        case .garageStatus:
-                            GarageDoorStatusCard()
-                                .padding()
-                        case .garageLiveFeed:
-                            GarageDoorLiveFeedCard(
-                                cameraUrl: cameraUrl,
-                                cameraUsername: cameraUsername,
-                                cameraPassword: cameraPassword,
-                                isActive: isLiveFeedPageSelected
-                            )
-                            .padding()
-                        case .tibberTop3:
-                            ScrollView {
-                                TopThreeUsageCard(store: store)
-                                    .padding()
-                            }
-                        case .websocketTop3:
-                            ScrollView {
-                                WebSocketTopThreeUsageCard(store: store)
-                                    .padding()
-                            }
-                        case .zaptec:
-                            ScrollView {
-                                ZaptecControlView(manager: ZaptecManager.shared)
-                                    .padding()
-                            }
-                        }
-                    }
-                    .tag(card)
+            TabView(selection: $selectedPageIndex) {
+                ForEach(Array(availableCardKinds.enumerated()), id: \.offset) { pair in
+                    let index = pair.offset
+                    let card = pair.element
+                    pageView(for: card)
+                        .id("\(index)-\(card.rawValue)")
+                        .tag(index)
                 }
             }
-            .id(setID)
             .tabViewStyle(.page(indexDisplayMode: .never))
             .onAppear {
-                normalizeCardSelection()
-                AppLog.info(.camera, "Stats TabView appeared. currentPage=\(selectedCard.rawValue)")
+                normalizePageSelection()
+                let current = selectedCardKind?.rawValue ?? "none"
+                AppLog.info(.camera, "Stats TabView appeared. currentPage=\(current)")
             }
-            .onChange(of: selectedCard) { newCard in
-                AppLog.info(.camera, "Stats TabView page changed to=\(newCard.rawValue)")
+            .onChange(of: selectedPageIndex) { _ in
+                let current = selectedCardKind?.rawValue ?? "none"
+                AppLog.info(.camera, "Stats TabView page changed to=\(current)")
             }
             .onChange(of: availableCardKinds) { _ in
-                normalizeCardSelection()
+                normalizePageSelection()
             }
 
             if availableCardKinds.count > 1 {
                 HStack(spacing: 8) {
-                    ForEach(availableCardKinds, id: \.self) { card in
+                    ForEach(Array(availableCardKinds.enumerated()), id: \.offset) { pair in
+                        let index = pair.offset
                         Circle()
-                            .fill(card == selectedCard ? Color.primary : Color.secondary.opacity(0.35))
+                            .fill(index == selectedPageIndex ? Color.primary : Color.secondary.opacity(0.35))
                             .frame(width: 7, height: 7)
                     }
                 }
