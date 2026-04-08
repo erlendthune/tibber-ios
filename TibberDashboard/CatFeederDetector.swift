@@ -17,6 +17,7 @@ class CatFeederDetector: ObservableObject {
     @Published var bowlState: BowlState = .unknown
     @Published var confidence: Double = 0
     @Published var lastSnapshot: UIImage? = nil
+    @Published var lastCroppedSnapshot: UIImage? = nil
     @Published var lastSnapshotDate: Date? = nil
 
     @AppStorage("catFeederDetectionEnabled") var isEnabled: Bool = false
@@ -24,12 +25,45 @@ class CatFeederDetector: ObservableObject {
     @AppStorage("catFeederLearnModeIntervalMinutes") var learnModeIntervalMinutes: Int = 15
     @AppStorage("catFeederConfidenceThreshold") var confidenceThreshold: Double = 0.75
     @AppStorage("catFeederAlertRepeatMinutes") var alertRepeatMinutes: Int = 30
+    @AppStorage("catFeederRoiX") var roiX: Double = 0.0
+    @AppStorage("catFeederRoiY") var roiY: Double = 0.0
+    @AppStorage("catFeederRoiWidth") var roiWidth: Double = 1.0
+    @AppStorage("catFeederRoiHeight") var roiHeight: Double = 1.0
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "TibberDashboard", category: "CatFeederDetector")
     private var vnModel: VNCoreMLModel?
     private var lastKnownState: BowlState = .unknown
     private var lastEmptyAlertTime: Date = .distantPast
     private var lastLearnSnapshotSavedAt: Date = .distantPast
+
+    private var clampedRoiRectTopLeft: CGRect {
+        let x = min(max(roiX, 0.0), 1.0)
+        let y = min(max(roiY, 0.0), 1.0)
+        let width = min(max(roiWidth, 0.01), 1.0)
+        let height = min(max(roiHeight, 0.01), 1.0)
+        let clampedX = min(x, 1.0 - width)
+        let clampedY = min(y, 1.0 - height)
+        return CGRect(x: clampedX, y: clampedY, width: width, height: height)
+    }
+
+    private var visionRoiRect: CGRect {
+        let roi = clampedRoiRectTopLeft
+        return CGRect(x: roi.origin.x, y: 1.0 - roi.origin.y - roi.size.height, width: roi.size.width, height: roi.size.height)
+    }
+
+    private func cropImage(_ image: UIImage) -> UIImage {
+        guard let cg = image.cgImage else { return image }
+        let clamped = clampedRoiRectTopLeft
+        let cropRect = CGRect(
+            x: clamped.origin.x * CGFloat(cg.width),
+            y: clamped.origin.y * CGFloat(cg.height),
+            width: clamped.size.width * CGFloat(cg.width),
+            height: clamped.size.height * CGFloat(cg.height)
+        ).integral
+
+        guard let cropped = cg.cropping(to: cropRect) else { return image }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+    }
 
     private init() {
         loadModel()
@@ -72,11 +106,13 @@ class CatFeederDetector: ObservableObject {
             return
         }
 
+        let croppedForRoi = cropImage(image)
         DispatchQueue.main.async {
             self.lastSnapshot = image
+            self.lastCroppedSnapshot = croppedForRoi
             self.lastSnapshotDate = Date()
         }
-        maybeSaveSnapshotToPhotosForLearning(image: image)
+        maybeSaveSnapshotToPhotosForLearning(image: croppedForRoi)
 
         guard isEnabled else {
             AppLog.debug(.camera, "Cat feeder detection disabled in settings; skipping ML inference")
@@ -124,7 +160,8 @@ class CatFeederDetector: ObservableObject {
                 self.handleAlertStateTransition(newState)
             }
         }
-        request.imageCropAndScaleOption = .centerCrop
+        request.regionOfInterest = visionRoiRect
+        request.imageCropAndScaleOption = .scaleFit
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         DispatchQueue.global(qos: .userInitiated).async {
