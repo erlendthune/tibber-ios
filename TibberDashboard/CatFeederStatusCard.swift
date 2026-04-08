@@ -44,7 +44,7 @@ struct CatFeederStatusCard: View {
 
             HStack(alignment: .center, spacing: 10) {
                 Group {
-                    if let image = detector.lastSnapshot {
+                    if let image = detector.lastCroppedSnapshot ?? detector.lastSnapshot {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()

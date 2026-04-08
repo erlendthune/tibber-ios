@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var store: TibberMonitorStore
+    @ObservedObject private var catFeederDetector = CatFeederDetector.shared
     @StateObject private var hueManager = HueManager.shared
     @StateObject private var zaptecManager = ZaptecManager.shared
     @StateObject private var telegramManager = TelegramManager.shared
@@ -26,6 +28,10 @@ struct SettingsView: View {
     @State private var catFeederCameraLiveCachingMs: Int = 1000
     @State private var catFeederLearnModeEnabled: Bool = false
     @State private var catFeederLearnModeIntervalMinutes: Int = 15
+    @State private var catFeederRoiX: Double = 0.0
+    @State private var catFeederRoiY: Double = 0.0
+    @State private var catFeederRoiWidth: Double = 1.0
+    @State private var catFeederRoiHeight: Double = 1.0
     @State private var catFeederDetectionEnabled: Bool = false
     @State private var catFeederDetectionInterval: Int = 5
     @State private var catFeederConfidenceThreshold: Double = 0.75
@@ -74,6 +80,10 @@ struct SettingsView: View {
         var catFeederCameraLiveCachingMs: Int
         var catFeederLearnModeEnabled: Bool
         var catFeederLearnModeIntervalMinutes: Int
+        var catFeederRoiX: Double
+        var catFeederRoiY: Double
+        var catFeederRoiWidth: Double
+        var catFeederRoiHeight: Double
 
         var detectionEnabled: Bool
         var detectionInterval: Int
@@ -108,6 +118,23 @@ struct SettingsView: View {
     private var hasUnsavedChanges: Bool {
         guard let originalSnapshot else { return false }
         return currentSnapshot() != originalSnapshot
+    }
+
+    private var catFeederMaxRoiX: Double {
+        max(0.0, 1.0 - catFeederRoiWidth)
+    }
+
+    private var catFeederMaxRoiY: Double {
+        max(0.0, 1.0 - catFeederRoiHeight)
+    }
+
+    // SwiftUI Slider with a non-zero step can crash on a zero-length range.
+    private var catFeederRoiXSliderUpperBound: Double {
+        max(0.01, catFeederMaxRoiX)
+    }
+
+    private var catFeederRoiYSliderUpperBound: Double {
+        max(0.01, catFeederMaxRoiY)
     }
     
     var body: some View {
@@ -401,7 +428,7 @@ struct SettingsView: View {
 
                 Section(
                     header: Text("Cat Feeder Camera Learn Mode"),
-                    footer: Text("When enabled, the app saves feeder snapshots to your Photos library at the selected interval so you can improve your training dataset.")
+                    footer: Text("When enabled, the app saves cropped feeder snapshots to Photos. Adjust the bowl region below; the same region is used for learning and detection.")
                 ) {
                     Toggle("Enable Learn Mode", isOn: $catFeederLearnModeEnabled)
 
@@ -411,6 +438,84 @@ struct SettingsView: View {
                         in: 1...240,
                         step: 1
                     )
+                    .disabled(!catFeederLearnModeEnabled)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Bowl Region")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Group {
+                            if let snapshot = catFeederDetector.lastSnapshot {
+                                Image(uiImage: snapshot)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                ZStack {
+                                    Color(.systemGray5)
+                                    Text("No snapshot yet")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 140)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            GeometryReader { geo in
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.yellow, lineWidth: 2)
+                                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.yellow.opacity(0.2)))
+                                    .frame(
+                                        width: catFeederRoiWidth * geo.size.width,
+                                        height: catFeederRoiHeight * geo.size.height
+                                    )
+                                    .offset(
+                                        x: catFeederRoiX * geo.size.width,
+                                        y: catFeederRoiY * geo.size.height
+                                    )
+                            }
+                        )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Left: \(Int(catFeederRoiX * 100))%")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Slider(value: $catFeederRoiX, in: 0...catFeederRoiXSliderUpperBound, step: 0.01)
+                                .disabled(!catFeederLearnModeEnabled || catFeederMaxRoiX == 0)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Top: \(Int(catFeederRoiY * 100))%")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Slider(value: $catFeederRoiY, in: 0...catFeederRoiYSliderUpperBound, step: 0.01)
+                                .disabled(!catFeederLearnModeEnabled || catFeederMaxRoiY == 0)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Width: \(Int(catFeederRoiWidth * 100))%")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Slider(value: $catFeederRoiWidth, in: 0.1...1, step: 0.01)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Height: \(Int(catFeederRoiHeight * 100))%")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Slider(value: $catFeederRoiHeight, in: 0.1...1, step: 0.01)
+                        }
+
+                        Button("Reset to Full Frame") {
+                            catFeederRoiX = 0
+                            catFeederRoiY = 0
+                            catFeederRoiWidth = 1
+                            catFeederRoiHeight = 1
+                        }
+                        .font(.caption)
+                    }
                     .disabled(!catFeederLearnModeEnabled)
                 }
 
@@ -690,6 +795,7 @@ struct SettingsView: View {
             .interactiveDismissDisabled(hasUnsavedChanges)
             .onAppear {
                 loadCameraSettings()
+                normalizeCatFeederRoi()
                 originalSnapshot = currentSnapshot()
                 if store.showMonthlyTop3Usage {
                     store.refreshTopUsage()
@@ -702,10 +808,23 @@ struct SettingsView: View {
                     store.clearTopUsageDisplay()
                 }
             }
+            .onChange(of: catFeederRoiX) { _ in
+                normalizeCatFeederRoi()
+            }
+            .onChange(of: catFeederRoiY) { _ in
+                normalizeCatFeederRoi()
+            }
+            .onChange(of: catFeederRoiWidth) { _ in
+                normalizeCatFeederRoi()
+            }
+            .onChange(of: catFeederRoiHeight) { _ in
+                normalizeCatFeederRoi()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if hasUnsavedChanges {
                         Button("Cancel") {
+                            dismissKeyboard()
                             if let originalSnapshot {
                                 restore(snapshot: originalSnapshot)
                             }
@@ -715,6 +834,7 @@ struct SettingsView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(hasUnsavedChanges ? "Save" : "Done") {
+                        dismissKeyboard()
                         // Persist camera and detection settings to UserDefaults
                         persistCameraSettings()
                         originalSnapshot = currentSnapshot()
@@ -748,6 +868,10 @@ struct SettingsView: View {
             catFeederCameraLiveCachingMs: catFeederCameraLiveCachingMs,
             catFeederLearnModeEnabled: catFeederLearnModeEnabled,
             catFeederLearnModeIntervalMinutes: catFeederLearnModeIntervalMinutes,
+            catFeederRoiX: catFeederRoiX,
+            catFeederRoiY: catFeederRoiY,
+            catFeederRoiWidth: catFeederRoiWidth,
+            catFeederRoiHeight: catFeederRoiHeight,
             detectionEnabled: detectionEnabled,
             detectionInterval: detectionInterval,
             confidenceThreshold: confidenceThreshold,
@@ -775,6 +899,10 @@ struct SettingsView: View {
         )
     }
 
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     private func restore(snapshot: SettingsSnapshot) {
         store.apiKey = snapshot.apiKey
         store.homeId = snapshot.homeId
@@ -798,6 +926,10 @@ struct SettingsView: View {
         catFeederCameraLiveCachingMs = snapshot.catFeederCameraLiveCachingMs
         catFeederLearnModeEnabled = snapshot.catFeederLearnModeEnabled
         catFeederLearnModeIntervalMinutes = snapshot.catFeederLearnModeIntervalMinutes
+        catFeederRoiX = snapshot.catFeederRoiX
+        catFeederRoiY = snapshot.catFeederRoiY
+        catFeederRoiWidth = snapshot.catFeederRoiWidth
+        catFeederRoiHeight = snapshot.catFeederRoiHeight
 
         detectionEnabled = snapshot.detectionEnabled
         detectionInterval = snapshot.detectionInterval
@@ -855,6 +987,10 @@ struct SettingsView: View {
         UserDefaults.standard.set(catFeederCameraLiveCachingMs, forKey: "catFeederCameraLiveCachingMs")
         UserDefaults.standard.set(catFeederLearnModeEnabled, forKey: "catFeederLearnModeEnabled")
         UserDefaults.standard.set(catFeederLearnModeIntervalMinutes, forKey: "catFeederLearnModeIntervalMinutes")
+        UserDefaults.standard.set(catFeederRoiX, forKey: "catFeederRoiX")
+        UserDefaults.standard.set(catFeederRoiY, forKey: "catFeederRoiY")
+        UserDefaults.standard.set(catFeederRoiWidth, forKey: "catFeederRoiWidth")
+        UserDefaults.standard.set(catFeederRoiHeight, forKey: "catFeederRoiHeight")
         UserDefaults.standard.set(catFeederDetectionEnabled, forKey: "catFeederDetectionEnabled")
         UserDefaults.standard.set(catFeederDetectionInterval, forKey: "catFeederDetectionInterval")
         UserDefaults.standard.set(catFeederConfidenceThreshold, forKey: "catFeederConfidenceThreshold")
@@ -882,9 +1018,25 @@ struct SettingsView: View {
         catFeederCameraLiveCachingMs = UserDefaults.standard.integer(forKey: "catFeederCameraLiveCachingMs") == 0 ? 1000 : UserDefaults.standard.integer(forKey: "catFeederCameraLiveCachingMs")
         catFeederLearnModeEnabled = UserDefaults.standard.bool(forKey: "catFeederLearnModeEnabled")
         catFeederLearnModeIntervalMinutes = UserDefaults.standard.integer(forKey: "catFeederLearnModeIntervalMinutes") == 0 ? 15 : UserDefaults.standard.integer(forKey: "catFeederLearnModeIntervalMinutes")
+        catFeederRoiX = UserDefaults.standard.object(forKey: "catFeederRoiX") as? Double ?? 0.0
+        catFeederRoiY = UserDefaults.standard.object(forKey: "catFeederRoiY") as? Double ?? 0.0
+        catFeederRoiWidth = UserDefaults.standard.object(forKey: "catFeederRoiWidth") as? Double ?? 1.0
+        catFeederRoiHeight = UserDefaults.standard.object(forKey: "catFeederRoiHeight") as? Double ?? 1.0
         catFeederDetectionEnabled = UserDefaults.standard.bool(forKey: "catFeederDetectionEnabled")
         catFeederDetectionInterval = UserDefaults.standard.integer(forKey: "catFeederDetectionInterval") == 0 ? 5 : UserDefaults.standard.integer(forKey: "catFeederDetectionInterval")
         catFeederConfidenceThreshold = UserDefaults.standard.double(forKey: "catFeederConfidenceThreshold") == 0 ? 0.75 : UserDefaults.standard.double(forKey: "catFeederConfidenceThreshold")
         catFeederAlertRepeatMinutes = UserDefaults.standard.integer(forKey: "catFeederAlertRepeatMinutes") == 0 ? 30 : UserDefaults.standard.integer(forKey: "catFeederAlertRepeatMinutes")
+    }
+
+    private func normalizeCatFeederRoi() {
+        if !catFeederRoiX.isFinite { catFeederRoiX = 0.0 }
+        if !catFeederRoiY.isFinite { catFeederRoiY = 0.0 }
+        if !catFeederRoiWidth.isFinite { catFeederRoiWidth = 1.0 }
+        if !catFeederRoiHeight.isFinite { catFeederRoiHeight = 1.0 }
+
+        catFeederRoiWidth = min(max(catFeederRoiWidth, 0.1), 1.0)
+        catFeederRoiHeight = min(max(catFeederRoiHeight, 0.1), 1.0)
+        catFeederRoiX = min(max(catFeederRoiX, 0.0), 1.0 - catFeederRoiWidth)
+        catFeederRoiY = min(max(catFeederRoiY, 0.0), 1.0 - catFeederRoiHeight)
     }
 }
